@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env.production
+.env.staging
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pino*.log
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Prisma generated files (regenerated via prisma generate)
+# Note: Keep schema.prisma, exclude generated client if custom output
+# prisma/generated/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# TypeScript cache
+tsconfig.tsbuildinfo
+
+# Jest cache
+.jest-cache/
+jest_*/
+
+# Docker
+.docker/
+
+# Misc
+*.tgz
+*.tar.gz

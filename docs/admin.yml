@@ -1,0 +1,34 @@
+paths:
+  /admin/metrics:
+    get:
+      summary: Get system-wide metrics
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: System metrics retrieved successfully
+        '403':
+          description: Forbidden - Requires ADMIN role
+  /admin/activity:
+    get:
+      summary: Get recent platform activity
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Recent activity retrieved successfully
+        '403':
+          description: Forbidden - Requires ADMIN role
+  /admin/inventory:
+    get:
+      summary: Get global inventory grouped by blood type
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Global inventory retrieved successfully
+        '403':
+          description: Forbidden - Requires ADMIN role

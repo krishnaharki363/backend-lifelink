@@ -1,0 +1,152 @@
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, role]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                role:
+                  type: string
+                  enum: [DONOR, HOSPITAL, BLOOD_BANK]
+                firstName: { type: string }
+                lastName: { type: string }
+                bloodType: { type: string }
+                dateOfBirth: { type: string, format: date }
+                phone: { type: string }
+                city: { type: string }
+                state: { type: string }
+              example:
+                email: "krishnaharki827@gmail.com"
+                password: "SecurePassword123"
+                role: "DONOR"
+                firstName: "Krishna"
+                lastName: "Harki"
+                bloodType: "O_POS"
+                dateOfBirth: "1995-05-15T00:00:00Z"
+                phone: "1234567890"
+                city: "Metropolis"
+                state: "NY"
+      responses:
+        '201':
+          description: User registered successfully
+  /auth/login:
+    post:
+      summary: Login
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Logged in successfully
+  /auth/logout:
+    post:
+      summary: Logout
+      tags: [Auth]
+      responses:
+        '200':
+          description: Logged out successfully
+  /blood-requests:
+    post:
+      summary: Create a blood request
+      tags: [Blood Requests]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                patientName:
+                  type: string
+                bloodType:
+                  type: string
+                unitsRequired:
+                  type: integer
+                urgency:
+                  type: string
+                requiredByDate:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Request created
+    get:
+      summary: Get all blood requests
+      tags: [Blood Requests]
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: bloodType
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of requests
+  /donors/search:
+    get:
+      summary: Search for compatible donors
+      tags: [Donors]
+      parameters:
+        - in: query
+          name: bloodType
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: city
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of compatible donors
+  /inventory:
+    put:
+      summary: Update blood inventory
+      tags: [Inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bloodType:
+                  type: string
+                unitsAvailable:
+                  type: integer
+      responses:
+        '200':
+          description: Inventory updated
+    get:
+      summary: Get system inventory
+      tags: [Inventory]
+      responses:
+        '200':
+          description: System inventory data

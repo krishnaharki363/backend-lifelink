@@ -1,0 +1,153 @@
+// This is your Prisma schema file.
+// Learn more about Prisma schemas: https://pris.ly/d/prisma-schema
+
+// ─── Generator ────────────────────────────────────────────────────────────────
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Datasource ───────────────────────────────────────────────────────────────
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  DONOR
+  HOSPITAL
+  BLOOD_BANK
+  ADMIN
+}
+
+enum BloodType {
+  A_POS
+  A_NEG
+  B_POS
+  B_NEG
+  AB_POS
+  AB_NEG
+  O_POS
+  O_NEG
+}
+
+enum RequestUrgency {
+  NORMAL
+  URGENT
+  CRITICAL
+}
+
+enum RequestStatus {
+  PENDING
+  FULFILLED
+  CANCELLED
+}
+
+// ─── Core Models ──────────────────────────────────────────────────────────────
+
+model User {
+  id              String   @id @default(uuid()) @db.Uuid
+  email           String   @unique
+  passwordHash    String
+  role            Role
+  isEmailVerified Boolean  @default(false)
+  isActive        Boolean  @default(true) // Support for soft-deletes
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // 1-to-1 Relations based on Role
+  donorProfile     DonorProfile?
+  hospitalProfile  HospitalProfile?
+  bloodBankProfile BloodBankProfile?
+
+  @@map("users")
+}
+
+model DonorProfile {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @unique @db.Uuid
+  firstName        String
+  lastName         String
+  bloodType        BloodType
+  dateOfBirth      DateTime
+  lastDonationDate DateTime?
+  phone            String
+  city             String
+  state            String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("donor_profiles")
+}
+
+model HospitalProfile {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @unique @db.Uuid
+  name          String
+  licenseNumber String   @unique
+  address       String
+  contactPerson String
+  phone         String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bloodRequests BloodRequest[]
+
+  @@map("hospital_profiles")
+}
+
+model BloodBankProfile {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @unique @db.Uuid
+  name          String
+  licenseNumber String   @unique
+  address       String
+  contactPerson String
+  phone         String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventory BloodInventory[]
+
+  @@map("blood_bank_profiles")
+}
+
+// ─── Operational Models ───────────────────────────────────────────────────────
+
+model BloodRequest {
+  id             String         @id @default(uuid()) @db.Uuid
+  hospitalId     String         @db.Uuid
+  patientName    String
+  bloodType      BloodType
+  unitsRequired  Int
+  urgency        RequestUrgency @default(NORMAL)
+  status         RequestStatus  @default(PENDING)
+  requiredByDate DateTime
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  hospital HospitalProfile @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@map("blood_requests")
+}
+
+model BloodInventory {
+  id             String    @id @default(uuid()) @db.Uuid
+  bloodBankId    String    @db.Uuid
+  bloodType      BloodType
+  unitsAvailable Int       @default(0)
+  lastUpdated    DateTime  @updatedAt
+
+  bloodBank BloodBankProfile @relation(fields: [bloodBankId], references: [id], onDelete: Cascade)
+
+  // A blood bank should only have one inventory record per blood type
+  @@unique([bloodBankId, bloodType])
+  @@map("blood_inventories")
+}
