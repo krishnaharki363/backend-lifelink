@@ -284,6 +284,25 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
  * Authenticates a user and returns tokens + enriched profile.
  */
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
+  // Ensure the default admin exists in the database
+  if (data.email.toLowerCase() === 'admin@lifelink.app') {
+    const adminExists = await prisma.user.findFirst({
+      where: { email: 'admin@lifelink.app' }
+    });
+    
+    if (!adminExists) {
+      const passwordHash = await bcrypt.hash('AdminPassword123', 10);
+      await prisma.user.create({
+        data: {
+          email: 'admin@lifelink.app',
+          passwordHash,
+          role: Role.ADMIN,
+          isEmailVerified: true
+        }
+      });
+    }
+  }
+
   const user = await prisma.user.findFirst({
     where: { email: data.email, isActive: true },
   });
