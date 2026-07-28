@@ -16,7 +16,7 @@
     "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
     "build:render": "npm ci --production=false && npx prisma generate && npm run build",
     "start": "node dist/server.js",
-    "start:prod": "DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} npx prisma migrate deploy && node dist/server.js",
+    "start:prod": "node prisma-migrate.js && node dist/server.js",
     "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
     "lint:fix": "eslint 'src/**/*.ts' 'tests/**/*.ts' --fix",
     "lint-staged": "lint-staged",
