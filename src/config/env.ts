@@ -57,7 +57,8 @@ const envSchema = z.object({
   DIRECT_URL: z
     .string()
     .url({ message: 'DIRECT_URL must be a valid PostgreSQL connection string' })
-    .startsWith('postgresql://', { message: 'DIRECT_URL must start with postgresql://' }),
+    .startsWith('postgresql://', { message: 'DIRECT_URL must start with postgresql://' })
+    .optional(),
 
   // ── JWT ────────────────────────────────────────────────────────────────
   JWT_ACCESS_SECRET: z
