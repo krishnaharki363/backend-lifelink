@@ -149,6 +149,7 @@ if (!parsed.success) {
   console.error('\n💡 Copy .env.example to .env and fill in all required values.\n');
 
   process.exit(1); // Exit with non-zero code so Docker/CI knows it failed
+  throw new Error('Environment validation failed:\n' + errors);
 }
 
 // ─── Export ─────────────────────────────────────────────────────────────────
