@@ -63,11 +63,24 @@ export const searchCompatibleDonors = async (query: SearchDonorsQuery) => {
   };
 
   if (city) {
-    whereClause.city = { contains: city, mode: 'insensitive' };
+    // Search across all location fields so hospitals can find donors
+    // regardless of which registration path they used (simple vs full form)
+    whereClause.OR = [
+      { city:         { contains: city, mode: 'insensitive' } },
+      { district:     { contains: city, mode: 'insensitive' } },
+      { municipality: { contains: city, mode: 'insensitive' } },
+    ];
   }
-  
+
   if (state) {
-    whereClause.state = { contains: state, mode: 'insensitive' };
+    // Append state/province filter to any existing OR clause
+    const stateFilter = [
+      { state:    { contains: state, mode: 'insensitive' } },
+      { province: { contains: state, mode: 'insensitive' } },
+    ];
+    whereClause.OR = whereClause.OR
+      ? [...whereClause.OR, ...stateFilter]
+      : stateFilter;
   }
 
   // Execute query and count in parallel
@@ -84,8 +97,12 @@ export const searchCompatibleDonors = async (query: SearchDonorsQuery) => {
         bloodType: true,
         city: true,
         state: true,
+        province: true,
+        district: true,
+        municipality: true,
         phone: true,
         lastDonationDate: true,
+        availableToDonate: true,
         user: {
           select: {
             email: true,

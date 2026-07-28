@@ -28,7 +28,7 @@ paths:
                 city: { type: string }
                 state: { type: string }
               example:
-                email: "krishnaharki827@gmail.com"
+                email: "example@gmail.com"
                 password: "SecurePassword123"
                 role: "DONOR"
                 firstName: "Krishna"

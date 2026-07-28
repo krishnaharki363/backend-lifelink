@@ -1,19 +1,134 @@
-// This is your Prisma schema file.
-// Learn more about Prisma schemas: https://pris.ly/d/prisma-schema
-
-// ─── Generator ────────────────────────────────────────────────────────────────
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
 }
 
-// ─── Datasource ───────────────────────────────────────────────────────────────
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-// ─── Enums ────────────────────────────────────────────────────────────────────
+model User {
+  id               String            @id @default(uuid()) @db.Uuid
+  email            String            @unique
+  passwordHash     String
+  role             Role
+  isEmailVerified  Boolean           @default(false)
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  bloodBankProfile BloodBankProfile?
+  donorProfile     DonorProfile?
+  hospitalProfile  HospitalProfile?
+
+  @@map("users")
+}
+
+model DonorProfile {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @unique @db.Uuid
+  firstName        String
+  lastName         String
+  bloodType        BloodType
+  dateOfBirth      DateTime
+  gender           String?
+  lastDonationDate DateTime?
+  phone            String
+
+  // Location — full Nepal-style hierarchy
+  province         String?
+  district         String?
+  municipality     String?
+  address          String?
+  // Legacy flat fields kept for backwards-compat / donor-search queries
+  city             String    @default("")
+  state            String    @default("")
+
+  // Health details (captured at registration, optional but encouraged)
+  weight                   Float?
+  donatedBefore            Boolean   @default(false)
+  currentlyHealthy         Boolean   @default(true)
+  onMedication             Boolean   @default(false)
+  medicalConditions        String?
+
+  // Availability & contact preference
+  availableToDonate        Boolean   @default(true)
+  preferredContactMethod   String    @default("phone")
+
+  // Emergency contact (stored as flat columns — no extra table needed)
+  emergencyContactName         String?
+  emergencyContactRelationship String?
+  emergencyContactPhone        String?
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("donor_profiles")
+}
+
+model HospitalProfile {
+  id            String         @id @default(uuid()) @db.Uuid
+  userId        String         @unique @db.Uuid
+  name          String
+  licenseNumber String         @unique
+  address       String
+  contactPerson String
+  phone         String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  bloodRequests BloodRequest[]
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("hospital_profiles")
+}
+
+model BloodBankProfile {
+  id            String           @id @default(uuid()) @db.Uuid
+  userId        String           @unique @db.Uuid
+  name          String
+  licenseNumber String           @unique
+  address       String
+  contactPerson String
+  phone         String
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventory     BloodInventory[]
+
+  @@map("blood_bank_profiles")
+}
+
+model BloodRequest {
+  id             String          @id @default(uuid()) @db.Uuid
+  hospitalId     String          @db.Uuid
+  patientName    String
+  bloodType      BloodType
+  unitsRequired  Int
+  urgency        RequestUrgency  @default(NORMAL)
+  status         RequestStatus   @default(PENDING)
+  requiredByDate DateTime
+  ward           String?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  hospital       HospitalProfile @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@map("blood_requests")
+}
+
+model BloodInventory {
+  id             String           @id @default(uuid()) @db.Uuid
+  bloodBankId    String           @db.Uuid
+  bloodType      BloodType
+  unitsAvailable Int              @default(0)
+  lastUpdated    DateTime         @updatedAt
+  bloodBank      BloodBankProfile @relation(fields: [bloodBankId], references: [id], onDelete: Cascade)
+
+  @@unique([bloodBankId, bloodType])
+  @@map("blood_inventories")
+}
 
 enum Role {
   DONOR
@@ -43,111 +158,4 @@ enum RequestStatus {
   PENDING
   FULFILLED
   CANCELLED
-}
-
-// ─── Core Models ──────────────────────────────────────────────────────────────
-
-model User {
-  id              String   @id @default(uuid()) @db.Uuid
-  email           String   @unique
-  passwordHash    String
-  role            Role
-  isEmailVerified Boolean  @default(false)
-  isActive        Boolean  @default(true) // Support for soft-deletes
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  // 1-to-1 Relations based on Role
-  donorProfile     DonorProfile?
-  hospitalProfile  HospitalProfile?
-  bloodBankProfile BloodBankProfile?
-
-  @@map("users")
-}
-
-model DonorProfile {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @unique @db.Uuid
-  firstName        String
-  lastName         String
-  bloodType        BloodType
-  dateOfBirth      DateTime
-  lastDonationDate DateTime?
-  phone            String
-  city             String
-  state            String
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("donor_profiles")
-}
-
-model HospitalProfile {
-  id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @unique @db.Uuid
-  name          String
-  licenseNumber String   @unique
-  address       String
-  contactPerson String
-  phone         String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bloodRequests BloodRequest[]
-
-  @@map("hospital_profiles")
-}
-
-model BloodBankProfile {
-  id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @unique @db.Uuid
-  name          String
-  licenseNumber String   @unique
-  address       String
-  contactPerson String
-  phone         String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  inventory BloodInventory[]
-
-  @@map("blood_bank_profiles")
-}
-
-// ─── Operational Models ───────────────────────────────────────────────────────
-
-model BloodRequest {
-  id             String         @id @default(uuid()) @db.Uuid
-  hospitalId     String         @db.Uuid
-  patientName    String
-  bloodType      BloodType
-  unitsRequired  Int
-  urgency        RequestUrgency @default(NORMAL)
-  status         RequestStatus  @default(PENDING)
-  requiredByDate DateTime
-  notes          String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  hospital HospitalProfile @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-
-  @@map("blood_requests")
-}
-
-model BloodInventory {
-  id             String    @id @default(uuid()) @db.Uuid
-  bloodBankId    String    @db.Uuid
-  bloodType      BloodType
-  unitsAvailable Int       @default(0)
-  lastUpdated    DateTime  @updatedAt
-
-  bloodBank BloodBankProfile @relation(fields: [bloodBankId], references: [id], onDelete: Cascade)
-
-  // A blood bank should only have one inventory record per blood type
-  @@unique([bloodBankId, bloodType])
-  @@map("blood_inventories")
 }

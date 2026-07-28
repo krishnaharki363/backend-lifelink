@@ -30,7 +30,7 @@
  *   router.use('/admin', authenticate, authorize('ADMIN'), adminRoutes);
  */
 
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import healthRoutes from './health.routes';
 import authRoutes from './auth.routes';
 import bloodRequestRoutes from './bloodRequest.routes';
@@ -39,6 +39,30 @@ import inventoryRoutes from './inventory.routes';
 import adminRoutes from './admin.routes';
 
 const router = Router();
+
+// ─── API Root ──────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1
+ * Returns a welcome message and a summary of available endpoints.
+ * Useful for quick sanity-checks and API discovery.
+ */
+router.get('/', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Welcome to the LifeLink API',
+    version: 'v1',
+    docs: '/api-docs',
+    endpoints: {
+      health: '/api/v1/health',
+      auth: '/api/v1/auth',
+      donors: '/api/v1/donors',
+      bloodRequests: '/api/v1/blood-requests',
+      inventory: '/api/v1/inventory',
+      admin: '/api/v1/admin',
+    },
+  });
+});
 
 // ─── Route Mounting ────────────────────────────────────────────────────────────
 

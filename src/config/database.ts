@@ -52,12 +52,21 @@ const prismaLogConfig: ConstructorParameters<typeof PrismaClient>[0] = {
         { emit: 'event', level: 'query' },
         { emit: 'stdout', level: 'info' },
         { emit: 'stdout', level: 'warn' },
-        { emit: 'stdout', level: 'error' },
+        // Use 'event' so we can filter benign Neon idle-close noise
+        { emit: 'event', level: 'error' },
       ]
     : [
         { emit: 'stdout', level: 'warn' },
-        { emit: 'stdout', level: 'error' },
+        // Use 'event' so we can filter benign Neon idle-close noise
+        { emit: 'event', level: 'error' },
       ],
+  // Neon free tier allows ~10 connections; keep the pool small.
+  // The pooler URL (pgbouncer=true) already handles multiplexing.
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
 };
 
 // ─── Singleton Factory ───────────────────────────────────────────────────────
@@ -83,6 +92,36 @@ const createPrismaClient = (): PrismaClient => {
       );
     });
   }
+
+  // Intercept Prisma error events to filter out benign Neon serverless noise.
+  //
+  // WHY FILTER?
+  // Neon closes idle connections after a short timeout. When this happens,
+  // Prisma logs "Error { kind: Closed, cause: None }" or the E57P01 message.
+  // These are NOT real errors — Prisma reconnects automatically on the next
+  // query. Printing them as errors is misleading and clutters the logs.
+  //
+  // We downgrade them to debug so they're invisible in production but
+  // available when LOG_LEVEL=debug for deep troubleshooting.
+  // @ts-expect-error — $on('error') types require emit:'event' to be set
+  client.$on('error', (event: { message: string; target: string }) => {
+    const msg = event.message ?? '';
+    const isNeonIdleClose =
+      msg.includes('kind: Closed') ||
+      msg.includes('terminating connection') ||
+      msg.includes('E57P01');
+
+    if (isNeonIdleClose) {
+      // Expected Neon serverless behaviour — downgrade to debug
+      log.debug(
+        { target: event.target },
+        'Neon closed idle connection (Prisma will reconnect automatically)',
+      );
+    } else {
+      // Genuine unexpected database error — keep at error level
+      log.error({ message: msg, target: event.target }, 'Prisma database error');
+    }
+  });
 
   return client;
 };
@@ -133,7 +172,21 @@ export const prisma: PrismaClient = (() => {
  * @throws {Error} If the database is unreachable
  */
 export const checkDatabaseConnection = async (): Promise<void> => {
-  await prisma.$queryRaw`SELECT 1`;
+  // Neon serverless can drop connections on cold start (E57P01).
+  // Retry once to allow the compute to wake up before giving up.
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (err: unknown) {
+    const isTerminated =
+      err instanceof Error && err.message.includes('terminating connection');
+    if (isTerminated) {
+      log.warn('Neon connection terminated — retrying after brief pause...');
+      await new Promise((r) => setTimeout(r, 1500));
+      await prisma.$queryRaw`SELECT 1`;
+    } else {
+      throw err;
+    }
+  }
 };
 
 /**

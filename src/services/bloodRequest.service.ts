@@ -22,6 +22,7 @@ const SELECT_REQUEST_DETAILS = {
   urgency: true,
   status: true,
   requiredByDate: true,
+  ward: true,
   notes: true,
   createdAt: true,
   hospital: {

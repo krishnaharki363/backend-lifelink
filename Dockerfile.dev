@@ -1,0 +1,51 @@
+# ════════════════════════════════════════════════════════════════════════════
+# LifeLink Backend — Development Dockerfile
+# ════════════════════════════════════════════════════════════════════════════
+#
+# Used exclusively by docker-compose.yml for local development.
+#
+# KEY DIFFERENCES from production Dockerfile:
+#   - No multi-stage build (we need devDeps like tsx, prisma CLI)
+#   - No TypeScript compilation — tsx watch transpiles on-the-fly
+#   - Source code is mounted as a volume → hot-reload works
+#   - node_modules lives inside the container (faster on macOS than bind mount)
+#
+# HOW HOT-RELOAD WORKS:
+#   docker-compose.yml mounts ./src → /app/src and ./prisma → /app/prisma.
+#   tsx watch detects changes in /app/src and restarts the process automatically.
+#   node_modules is intentionally NOT mounted (performance) — it lives only
+#   inside the container and is populated during the build step.
+# ════════════════════════════════════════════════════════════════════════════
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache dumb-init openssl libc6-compat
+
+# Copy package files and install ALL dependencies (including devDeps for tsx)
+COPY package*.json ./
+RUN npm ci && npm cache clean --force
+
+# Copy TypeScript config (needed by tsx for path alias resolution)
+COPY tsconfig.json tsconfig.paths.json ./
+
+# Copy Prisma schema and generate the client
+# The volume mount will overwrite ./prisma at runtime, but we pre-generate
+# the client here so the container can start immediately without an extra step.
+COPY prisma ./prisma
+RUN npx prisma generate
+
+# Expose the dev server port
+EXPOSE 5000
+
+# src/ and prisma/ are mounted as volumes by docker-compose — do not COPY them here.
+# tsx watch will pick up changes from the mounted volume automatically.
+
+# dumb-init ensures Ctrl+C (SIGINT) is forwarded to Node.js, triggering our
+# graceful shutdown logic and freeing the port cleanly.
+#
+# We call tsx directly (not npm run dev) to skip the `predev` port-killer script
+# which is only meaningful on a local machine — not inside a container.
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["npx", "tsx", "watch", "--tsconfig", "tsconfig.json", "src/server.ts"]

@@ -4,10 +4,10 @@
  */
 
 import { z } from 'zod';
-import { BloodType } from '@prisma/client';
+import { bloodTypeSchema } from './common';
 
 export const updateInventorySchema = z.object({
-  bloodType: z.nativeEnum(BloodType, { errorMap: () => ({ message: 'Invalid blood type' }) }),
+  bloodType: bloodTypeSchema,
   unitsAvailable: z.number().int().min(0, 'Units available cannot be negative'),
 });
 

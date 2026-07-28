@@ -1,0 +1,48 @@
+# ════════════════════════════════════════════════════════════════════════════
+# docker-compose.yml — Development Environment
+# ════════════════════════════════════════════════════════════════════════════
+#
+# Usage:
+#   npm run docker:dev        → Build image and start (with logs)
+#   npm run docker:dev:detach → Start in background
+#   npm run docker:down       → Stop and remove containers
+#
+# HOT-RELOAD:
+#   ./src and ./prisma are mounted as volumes inside the container.
+#   tsx watch detects file changes and restarts Node automatically.
+#   Edit any file in src/ and the server reloads within ~1 second.
+#
+# NODE_MODULES:
+#   node_modules is NOT mounted from the host — it lives only inside the
+#   container. This avoids the severe performance penalty of bind-mounting
+#   node_modules on macOS (OSXFS is slow for thousands of small files).
+#   If you add a new package, run: docker compose up --build
+# ════════════════════════════════════════════════════════════════════════════
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: lifelink-api-dev
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount source so tsx watch can detect changes → hot-reload
+      - ./src:/app/src
+      # Mount prisma so schema changes are reflected immediately
+      - ./prisma:/app/prisma
+      # Named volume for node_modules — keeps the container's modules isolated
+      # from the host. Without this, a host bind-mount would overwrite the
+      # container's node_modules with nothing (since host has its own copy).
+      - node_modules_dev:/app/node_modules
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+    # Restart automatically if the process crashes (not on Ctrl+C)
+    restart: on-failure
+
+volumes:
+  node_modules_dev:
+    name: lifelink_node_modules_dev

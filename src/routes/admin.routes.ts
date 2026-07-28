@@ -5,13 +5,13 @@
 
 import { Router } from 'express';
 import { getSystemMetrics, getRecentActivity, getInventoryByBloodType } from '@controllers/admin.controller';
-import { requireAuth, requireRole } from '@middleware/auth';
+import { authenticate, authorize } from '@middleware/auth.middleware';
 import { Role } from '@prisma/client';
 
 const router = Router();
 
 // Apply auth and admin role check to ALL routes in this file
-router.use(requireAuth, requireRole([Role.ADMIN]));
+router.use(authenticate, authorize(Role.ADMIN));
 
 /**
  * @route   GET /api/v1/admin/metrics

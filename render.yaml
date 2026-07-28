@@ -1,0 +1,92 @@
+# render.yaml — Render Infrastructure-as-Code
+# https://render.com/docs/render-yaml
+#
+# This file tells Render exactly how to build and run the LifeLink backend.
+# Commit this file to your repo; Render will detect it automatically.
+#
+# HOW TO USE:
+#   1. Push this file to your GitHub/GitLab repo.
+#   2. In Render dashboard → New → Blueprint → connect your repo.
+#   3. Set the secret environment variables listed below in the Render dashboard
+#      (Environment → Secret Files / Environment Variables).
+#   4. Deploy.
+
+services:
+  - type: web
+    name: lifelink-backend
+    runtime: node
+    region: oregon           # Choose the region closest to your users
+    plan: free               # Change to "starter" for always-on (no sleep)
+
+    # ── Build ──────────────────────────────────────────────────────────────
+    buildCommand: npm run build:render
+    # npm ci  → clean, reproducible install (uses package-lock.json exactly)
+    # prisma generate → generates the Prisma Client from schema.prisma
+    # npm run build   → tsc + tsc-alias → outputs to dist/
+
+    # ── Start ──────────────────────────────────────────────────────────────
+    startCommand: npm run start:prod
+    # prisma migrate deploy → applies any pending migrations (idempotent, safe)
+    # node dist/server.js   → starts the compiled server
+
+    # ── Health Check ───────────────────────────────────────────────────────
+    # Render uses this to determine if the service is healthy after deploy.
+    # Returns 200 when the server and DB are both reachable.
+    healthCheckPath: /api/v1/health
+
+    # ── Auto Deploy ────────────────────────────────────────────────────────
+    # Render will redeploy automatically on every push to the branch below.
+    autoDeploy: true
+    branch: main             # Change to your default branch if different
+
+    # ── Environment Variables ──────────────────────────────────────────────
+    # Static / non-secret values are defined here.
+    # SECRET values (DATABASE_URL, JWT secrets, SMTP credentials, etc.)
+    # must be added through the Render dashboard (Environment tab) and are
+    # NOT stored in this file for security reasons.
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: 10000          # Render assigns port 10000 by default for web services
+
+      - key: API_VERSION
+        value: v1
+
+      - key: LOG_LEVEL
+        value: info
+
+      - key: BCRYPT_SALT_ROUNDS
+        value: "12"
+
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "900000"
+
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: "100"
+
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+
+      - key: SMTP_PORT
+        value: "587"
+
+      - key: SMTP_SECURE
+        value: "false"
+
+      - key: EMAIL_FROM
+        value: "LifeLink <noreply@lifelink.app>"
+
+      # ── Secrets (set these in Render dashboard, NOT here) ────────────────
+      # DATABASE_URL      → Neon pooled connection string  (pgbouncer=true)
+      # DIRECT_URL        → Neon direct connection string  (for migrations)
+      # JWT_ACCESS_SECRET → min 32 chars, random string
+      # JWT_REFRESH_SECRET→ min 32 chars, different random string
+      # ALLOWED_ORIGINS   → https://lifelink.krishnaharki.com.np
+      # SMTP_HOST         → e.g. smtp.gmail.com
+      # SMTP_USER         → your Gmail address
+      # SMTP_PASS         → your Gmail App Password

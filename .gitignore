@@ -10,6 +10,7 @@ build/
 .env.local
 .env.production
 .env.staging
+# .env.example is intentionally tracked — it's a safe template with no real secrets
 
 # Logs
 logs/

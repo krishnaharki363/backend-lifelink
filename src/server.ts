@@ -45,6 +45,32 @@ import { disconnectDatabase } from '@config/database';
 
 const server = http.createServer(app);
 
+// ─── Socket Tracking ─────────────────────────────────────────────────────────
+//
+// WHY TRACK SOCKETS?
+// server.close() stops accepting NEW connections but waits indefinitely for
+// existing keep-alive connections to close on their own. HTTP keep-alive
+// connections can stay open for 30–120 seconds, meaning Ctrl+C appears to hang
+// and the port stays bound.
+//
+// Fix: track every open socket and destroy them all during shutdown so the
+// process exits immediately and the port is freed right away.
+
+const openSockets = new Set<http.ServerResponse['socket']>();
+
+server.on('connection', (socket) => {
+  openSockets.add(socket);
+  socket.once('close', () => openSockets.delete(socket));
+});
+
+/** Destroys all tracked sockets, unblocking server.close(). */
+const destroyOpenSockets = (): void => {
+  for (const socket of openSockets) {
+    socket?.destroy();
+  }
+  openSockets.clear();
+};
+
 // ─── Graceful Shutdown ────────────────────────────────────────────────────────
 
 /**
@@ -56,10 +82,12 @@ const server = http.createServer(app);
 const gracefulShutdown = (signal: string): void => {
   logger.info(`${signal} received — initiating graceful shutdown`);
 
-  // Stop accepting new HTTP connections.
-  // Existing connections will be allowed to finish.
+  // Stop accepting new HTTP connections, then destroy lingering keep-alive
+  // sockets so server.close() callback fires immediately.
+  destroyOpenSockets();
+
   server.close(async () => {
-    logger.info('HTTP server closed — no longer accepting new connections');
+    logger.info('HTTP server closed — port released');
 
     try {
       // Close the Prisma connection pool.
@@ -105,7 +133,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
  */
 process.on('uncaughtException', (err: Error) => {
   logger.fatal({ err }, 'UNCAUGHT EXCEPTION — shutting down immediately');
-  // Give the logger a tick to flush before exiting
+  destroyOpenSockets();
   setTimeout(() => process.exit(1), 100).unref();
 });
 
@@ -117,7 +145,7 @@ process.on('uncaughtException', (err: Error) => {
  */
 process.on('unhandledRejection', (reason: unknown) => {
   logger.fatal({ reason }, 'UNHANDLED PROMISE REJECTION — shutting down immediately');
-  // Trigger graceful shutdown to close connections before exiting
+  destroyOpenSockets();
   server.close(() => {
     process.exit(1);
   });
