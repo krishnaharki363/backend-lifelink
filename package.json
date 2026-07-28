@@ -14,7 +14,7 @@
     "predev": "command -v lsof > /dev/null 2>&1 && lsof -ti :5000 | xargs kill -9 2>/dev/null || true",
     "dev": "tsx watch --tsconfig tsconfig.json src/server.ts",
     "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
-    "build:render": "npm ci && npx prisma generate && npm run build",
+    "build:render": "npm ci --production=false && npx prisma generate && npm run build",
     "start": "node dist/server.js",
     "start:prod": "npx prisma migrate deploy && node dist/server.js",
     "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
