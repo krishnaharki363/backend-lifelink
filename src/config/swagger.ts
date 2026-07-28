@@ -19,6 +19,10 @@ const options: swaggerJsdoc.Options = {
     },
     servers: [
       {
+        url: `https://lifelink-backend-hpwu.onrender.com/api/${env.API_VERSION}`,
+        description: 'Production Server (Render)',
+      },
+      {
         url: `http://localhost:${env.PORT}/api/${env.API_VERSION}`,
         description: 'Local Development Server',
       },
