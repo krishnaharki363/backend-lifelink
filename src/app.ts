@@ -177,6 +177,17 @@ const createApp = (): Application => {
   // It will be accessible at http://localhost:PORT/api-docs
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+  // ── Root Endpoint for Health & Pings ───────────────────────────────────
+  // Handles root GET / and HEAD / requests from Render's routing system to prevent 404 noise.
+  app.get('/', (_req, res) => {
+    res.json({
+      success: true,
+      message: 'LifeLink Backend API is running',
+      health: `/api/${env.API_VERSION}/health`,
+      docs: '/api-docs',
+    });
+  });
+
   // ── 10. API Routes ───────────────────────────────────────────────────────
   // All versioned API routes are mounted here.
   // The router handles further sub-routing internally.
