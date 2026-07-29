@@ -15,7 +15,7 @@ services:
   - type: web
     name: lifelink-backend
     runtime: node
-    region: oregon           # Choose the region closest to your users
+    region: singapore           # Choose the region closest to your users
     plan: free               # Change to "starter" for always-on (no sleep)
 
     # ── Build ──────────────────────────────────────────────────────────────

@@ -64,13 +64,14 @@ const buildRateLimitResponse = (message: string): ApiErrorResponse => ({
  * Values are configurable via environment variables.
  */
 export const globalLimiter = rateLimit({
-  windowMs: env.RATE_LIMIT_WINDOW_MS,   // Default: 15 minutes
-  max: env.RATE_LIMIT_MAX_REQUESTS,     // Default: 100 requests per window
-  standardHeaders: 'draft-7',           // Return rate limit info in RateLimit-* headers (RFC draft)
-  legacyHeaders: false,                 // Disable deprecated X-RateLimit-* headers
+  windowMs: env.RATE_LIMIT_WINDOW_MS, // Default: 15 minutes
+  max: env.RATE_LIMIT_MAX_REQUESTS, // Default: 100 requests per window
+  standardHeaders: 'draft-7', // Return rate limit info in RateLimit-* headers (RFC draft)
+  legacyHeaders: false, // Disable deprecated X-RateLimit-* headers
 
-  // Skip rate limiting in test environment — tests shouldn't be throttled
-  skip: () => env.NODE_ENV === 'test',
+  // Skip rate limiting in test environment or for health check requests
+  skip: (req) =>
+    env.NODE_ENV === 'test' || req.originalUrl.endsWith('/health') || req.path.endsWith('/health'),
 
   handler: (_req, res) => {
     res
@@ -90,17 +91,19 @@ export const globalLimiter = rateLimit({
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes — fixed, not configurable
-  max: 10,                   // 10 login attempts per 15 minutes
+  max: 10, // 10 login attempts per 15 minutes
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   skip: () => env.NODE_ENV === 'test',
 
   handler: (_req, res) => {
-    res.status(HttpStatus.TOO_MANY_REQUESTS).json(
-      buildRateLimitResponse(
-        'Too many login attempts. Please wait 15 minutes before trying again.',
-      ),
-    );
+    res
+      .status(HttpStatus.TOO_MANY_REQUESTS)
+      .json(
+        buildRateLimitResponse(
+          'Too many login attempts. Please wait 15 minutes before trying again.',
+        ),
+      );
   },
 });
 
@@ -115,16 +118,16 @@ export const authLimiter = rateLimit({
  */
 export const sensitiveApiLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour window
-  max: 5,                    // 5 requests per hour
+  max: 5, // 5 requests per hour
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   skip: () => env.NODE_ENV === 'test',
 
   handler: (_req, res) => {
-    res.status(HttpStatus.TOO_MANY_REQUESTS).json(
-      buildRateLimitResponse(
-        'Too many requests for this action. Please try again in an hour.',
-      ),
-    );
+    res
+      .status(HttpStatus.TOO_MANY_REQUESTS)
+      .json(
+        buildRateLimitResponse('Too many requests for this action. Please try again in an hour.'),
+      );
   },
 });
