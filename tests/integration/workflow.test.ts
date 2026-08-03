@@ -18,15 +18,14 @@ describe('LifeLink Workflow Integration', () => {
   let bankId: string;
 
   beforeAll(async () => {
-    // Clear tables
-    await prisma.notification.deleteMany();
-    await prisma.appointment.deleteMany();
-    await prisma.bloodInventory.deleteMany();
-    await prisma.bloodRequest.deleteMany();
-    await prisma.donorProfile.deleteMany();
-    await prisma.hospitalProfile.deleteMany();
-    await prisma.bloodBankProfile.deleteMany();
-    await prisma.user.deleteMany();
+    // Clear only test users to protect developer/seeding accounts
+    await prisma.user.deleteMany({
+      where: {
+        email: {
+          endsWith: '@lifelink.app',
+        },
+      },
+    });
 
     // 1. Register Donor
     const donorRes = await request(app)
@@ -89,14 +88,14 @@ describe('LifeLink Workflow Integration', () => {
   });
 
   afterAll(async () => {
-    await prisma.notification.deleteMany();
-    await prisma.appointment.deleteMany();
-    await prisma.bloodInventory.deleteMany();
-    await prisma.bloodRequest.deleteMany();
-    await prisma.donorProfile.deleteMany();
-    await prisma.hospitalProfile.deleteMany();
-    await prisma.bloodBankProfile.deleteMany();
-    await prisma.user.deleteMany();
+    // Clear only test users to protect developer/seeding accounts
+    await prisma.user.deleteMany({
+      where: {
+        email: {
+          endsWith: '@lifelink.app',
+        },
+      },
+    });
     await disconnectDatabase();
   });
 

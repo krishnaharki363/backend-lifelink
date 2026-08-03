@@ -17,15 +17,25 @@ import { ErrorCode } from '@interfaces/error.interface';
 // ─── Test Lifecycle ───────────────────────────────────────────────────────────
 
 beforeAll(async () => {
-  // Clear the database before running tests to ensure a clean slate
-  await prisma.donorProfile.deleteMany();
-  await prisma.user.deleteMany();
+  // Clear only test users to protect developer/seeding accounts
+  await prisma.user.deleteMany({
+    where: {
+      email: {
+        endsWith: '@lifelink.app',
+      },
+    },
+  });
 });
 
 afterAll(async () => {
   // Clear data created during tests
-  await prisma.donorProfile.deleteMany();
-  await prisma.user.deleteMany();
+  await prisma.user.deleteMany({
+    where: {
+      email: {
+        endsWith: '@lifelink.app',
+      },
+    },
+  });
   // Close the Prisma connection pool cleanly
   await disconnectDatabase();
 });
