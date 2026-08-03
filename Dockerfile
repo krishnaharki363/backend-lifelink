@@ -94,6 +94,7 @@ COPY --from=builder --chown=node:node /app/dist ./dist
 
 # Copy Prisma schema and the generated client (needed at runtime for queries)
 COPY --from=builder --chown=node:node /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=node:node /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --chown=node:node prisma ./prisma
 
 # Copy the entrypoint script that runs migrations before starting the server
