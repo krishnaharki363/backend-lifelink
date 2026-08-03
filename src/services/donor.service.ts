@@ -75,7 +75,7 @@ export const searchCompatibleDonors = async (query: SearchDonorsQuery) => {
 
   if (state) {
     // Append state/province filter to any existing OR clause
-    const stateFilter = [
+    const stateFilter: Prisma.DonorProfileWhereInput[] = [
       { state:    { contains: state, mode: 'insensitive' } },
       { province: { contains: state, mode: 'insensitive' } },
     ];
