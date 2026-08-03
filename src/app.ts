@@ -107,7 +107,7 @@ const createApp = (): Application => {
         }
 
         // Always allow Swagger UI to make requests to the API (same origin)
-        const isSameOrigin = origin === `http://localhost:${env.PORT}` || origin === `http://127.0.0.1:${env.PORT}`;
+        const isSameOrigin = origin === `http://localhost:${env.PORT.toString()}` || origin === `http://127.0.0.1:${env.PORT.toString()}`;
         // Allow any localhost port for local development (handles Vite running on 5174, 5175, etc.)
         const isLocalhostDev = origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
 

@@ -86,7 +86,7 @@ const createPrismaClient = (): PrismaClient => {
         {
           query: event.query,
           params: event.params,
-          duration: `${event.duration}ms`,
+          duration: `${event.duration.toString()}ms`,
         },
         'Prisma Query',
       );
@@ -105,7 +105,7 @@ const createPrismaClient = (): PrismaClient => {
   // available when LOG_LEVEL=debug for deep troubleshooting.
   // @ts-expect-error — $on('error') types require emit:'event' to be set
   client.$on('error', (event: { message: string; target: string }) => {
-    const msg = event.message ?? '';
+    const msg = event.message;
     const isNeonIdleClose =
       msg.includes('kind: Closed') ||
       msg.includes('terminating connection') ||

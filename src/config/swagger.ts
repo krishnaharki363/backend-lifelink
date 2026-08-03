@@ -23,7 +23,7 @@ const options: swaggerJsdoc.Options = {
         description: 'Production Server (Render)',
       },
       {
-        url: `http://localhost:${env.PORT}/api/${env.API_VERSION}`,
+        url: `http://localhost:${env.PORT.toString()}/api/${env.API_VERSION}`,
         description: 'Local Development Server',
       },
     ],

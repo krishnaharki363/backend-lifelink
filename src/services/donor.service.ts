@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '@config/database';
-import { BloodType } from '@prisma/client';
+import { BloodType, type Prisma } from '@prisma/client';
 import type { SearchDonorsQuery, UpdateDonorProfileInput } from '@validators/donor.validators';
 import { AppError } from '@utils/AppError';
 
@@ -57,7 +57,7 @@ export const searchCompatibleDonors = async (query: SearchDonorsQuery) => {
   const compatibleTypes = getCompatibleBloodTypes(bloodType);
 
   // Build the dynamic WHERE clause
-  const whereClause: any = {
+  const whereClause: Prisma.DonorProfileWhereInput = {
     // Only search active donors (not soft-deleted users)
     user: { isActive: true },
     bloodType: { in: compatibleTypes },

@@ -21,7 +21,7 @@
  *   logger.error({ err, userId }, 'Failed to process request');
  */
 
-import pino from 'pino';
+import pino, { type DestinationStream } from 'pino';
 import { env, isDevelopment } from '@config/env';
 
 // ─── Transport Configuration ────────────────────────────────────────────────
@@ -33,7 +33,7 @@ import { env, isDevelopment } from '@config/env';
  * This is a crucial distinction — never ship pino-pretty to production.
  * It adds significant overhead and pollutes JSON with ANSI escape codes.
  */
-const transport = isDevelopment
+const transport = (isDevelopment
   ? pino.transport({
       target: 'pino-pretty',
       options: {
@@ -44,7 +44,7 @@ const transport = isDevelopment
         errorLikeObjectKeys: ['err', 'error'],
       },
     })
-  : undefined; // Production: use Pino's default JSON output to stdout
+  : undefined) as unknown as DestinationStream | undefined; // Production: use Pino's default JSON output to stdout
 
 // ─── Logger Instance ────────────────────────────────────────────────────────
 
