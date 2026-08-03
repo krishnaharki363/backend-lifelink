@@ -17,8 +17,7 @@
  */
 
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
-import type { ZodTypeAny } from 'zod';
-import { ZodError } from 'zod';
+import { ZodError, type ZodTypeAny } from 'zod';
 import { catchAsync } from '@utils/asyncWrapper';
 
 /**
@@ -38,7 +37,7 @@ export type ZodSchemaType = ZodTypeAny;
 export const validateBody = (schema: ZodSchemaType): RequestHandler =>
   catchAsync(async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     try {
-      req.body = schema.parse(req.body);
+      req.body = (await schema.parseAsync(req.body)) as Record<string, unknown>;
       next();
     } catch (error) {
       if (error instanceof ZodError) {
@@ -55,7 +54,7 @@ export const validateBody = (schema: ZodSchemaType): RequestHandler =>
 export const validateQuery = (schema: ZodSchemaType): RequestHandler =>
   catchAsync(async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     try {
-      req.query = schema.parse(req.query);
+      req.query = (await schema.parseAsync(req.query)) as Record<string, string | string[] | undefined>;
       next();
     } catch (error) {
       if (error instanceof ZodError) {

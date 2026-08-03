@@ -29,8 +29,7 @@
  *   // controller → asyncWrapper → Express error pipeline → errorHandler
  */
 
-import type { IAppError, IValidationError } from '@interfaces/error.interface';
-import { ErrorCode } from '@interfaces/error.interface';
+import { ErrorCode, type IAppError, type IValidationError } from '@interfaces/error.interface';
 import { HttpStatus, type HttpStatusCode } from '@constants/http.constants';
 
 // ─── AppError Class ───────────────────────────────────────────────────────────

@@ -15,3 +15,18 @@ export const searchDonorsQuerySchema = z.object({
 });
 
 export type SearchDonorsQuery = z.infer<typeof searchDonorsQuerySchema>;
+
+export const updateDonorProfileSchema = z.object({
+  phone: z.string().min(5, 'Phone must be at least 5 characters').optional(),
+  province: z.string().optional(),
+  district: z.string().optional(),
+  municipality: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  availableToDonate: z.boolean().optional(),
+  notificationsEnabled: z.boolean().optional(),
+  preferredContactMethod: z.string().optional(),
+});
+
+export type UpdateDonorProfileInput = z.infer<typeof updateDonorProfileSchema>;

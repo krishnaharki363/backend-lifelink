@@ -37,6 +37,9 @@ import bloodRequestRoutes from './bloodRequest.routes';
 import donorRoutes from './donor.routes';
 import inventoryRoutes from './inventory.routes';
 import adminRoutes from './admin.routes';
+import notificationRoutes from './notification.routes';
+import bloodBankRoutes from './bloodBank.routes';
+import appointmentRoutes from './appointment.routes';
 
 const router = Router();
 
@@ -60,6 +63,9 @@ router.get('/', (_req: Request, res: Response) => {
       bloodRequests: '/api/v1/blood-requests',
       inventory: '/api/v1/inventory',
       admin: '/api/v1/admin',
+      notifications: '/api/v1/notifications',
+      bloodBanks: '/api/v1/blood-banks',
+      appointments: '/api/v1/appointments',
     },
   });
 });
@@ -85,6 +91,9 @@ router.use('/blood-requests', bloodRequestRoutes);
 router.use('/donors', donorRoutes);
 router.use('/inventory', inventoryRoutes);
 router.use('/admin', adminRoutes);
+router.use('/notifications', notificationRoutes);
+router.use('/blood-banks', bloodBankRoutes);
+router.use('/appointments', appointmentRoutes);
 
 // Future feature routes will be mounted here:
 // router.use('/users', authenticate, userRoutes);

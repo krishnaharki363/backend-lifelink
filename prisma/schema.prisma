@@ -21,6 +21,7 @@ model User {
   bloodBankProfile BloodBankProfile?
   donorProfile     DonorProfile?
   hospitalProfile  HospitalProfile?
+  notifications    Notification[]
 
   @@map("users")
 }
@@ -54,6 +55,7 @@ model DonorProfile {
 
   // Availability & contact preference
   availableToDonate        Boolean   @default(true)
+  notificationsEnabled     Boolean   @default(true)
   preferredContactMethod   String    @default("phone")
 
   // Emergency contact (stored as flat columns — no extra table needed)
@@ -64,6 +66,9 @@ model DonorProfile {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  matchedRequests  BloodRequest[] @relation("MatchedDonorRequests")
+  appointments     Appointment[]
 
   @@map("donor_profiles")
 }
@@ -85,35 +90,45 @@ model HospitalProfile {
 }
 
 model BloodBankProfile {
-  id            String           @id @default(uuid()) @db.Uuid
-  userId        String           @unique @db.Uuid
-  name          String
-  licenseNumber String           @unique
-  address       String
-  contactPerson String
-  phone         String
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  inventory     BloodInventory[]
+  id               String           @id @default(uuid()) @db.Uuid
+  userId           String           @unique @db.Uuid
+  name             String
+  licenseNumber    String           @unique
+  address          String
+  contactPerson    String
+  phone            String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventory        BloodInventory[]
+  matchedRequests  BloodRequest[]   @relation("MatchedBloodBankRequests")
+  appointments     Appointment[]
 
   @@map("blood_bank_profiles")
 }
 
 model BloodRequest {
-  id             String          @id @default(uuid()) @db.Uuid
-  hospitalId     String          @db.Uuid
-  patientName    String
-  bloodType      BloodType
-  unitsRequired  Int
-  urgency        RequestUrgency  @default(NORMAL)
-  status         RequestStatus   @default(PENDING)
-  requiredByDate DateTime
-  ward           String?
-  notes          String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  hospital       HospitalProfile @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  id                  String            @id @default(uuid()) @db.Uuid
+  hospitalId          String            @db.Uuid
+  patientName         String
+  bloodType           BloodType
+  unitsRequired       Int
+  urgency             RequestUrgency    @default(NORMAL)
+  status              RequestStatus     @default(PENDING)
+  requiredByDate      DateTime
+  ward                String?
+  notes               String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  hospital            HospitalProfile   @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  
+  matchedDonorId      String?           @db.Uuid
+  matchedDonor        DonorProfile?     @relation("MatchedDonorRequests", fields: [matchedDonorId], references: [id], onDelete: SetNull)
+  
+  matchedBloodBankId  String?           @db.Uuid
+  matchedBloodBank    BloodBankProfile? @relation("MatchedBloodBankRequests", fields: [matchedBloodBankId], references: [id], onDelete: SetNull)
+  
+  appointments        Appointment[]
 
   @@map("blood_requests")
 }
@@ -128,6 +143,36 @@ model BloodInventory {
 
   @@unique([bloodBankId, bloodType])
   @@map("blood_inventories")
+}
+
+model Appointment {
+  id              String            @id @default(uuid()) @db.Uuid
+  donorId         String            @db.Uuid
+  donor           DonorProfile      @relation(fields: [donorId], references: [id], onDelete: Cascade)
+  bloodBankId     String            @db.Uuid
+  bloodBank       BloodBankProfile  @relation(fields: [bloodBankId], references: [id], onDelete: Cascade)
+  bloodRequestId  String?           @db.Uuid
+  bloodRequest    BloodRequest?     @relation(fields: [bloodRequestId], references: [id], onDelete: SetNull)
+  appointmentDate DateTime
+  slot            String
+  status          AppointmentStatus @default(PENDING)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("appointments")
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
 }
 
 enum Role {
@@ -156,6 +201,16 @@ enum RequestUrgency {
 
 enum RequestStatus {
   PENDING
+  MATCHED_INVENTORY
+  MATCHED_DONOR
+  IN_DELIVERY
   FULFILLED
+  CANCELLED
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
   CANCELLED
 }

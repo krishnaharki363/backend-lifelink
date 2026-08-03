@@ -4,7 +4,14 @@
  */
 
 import { Router } from 'express';
-import { getSystemMetrics, getRecentActivity, getInventoryByBloodType } from '@controllers/admin.controller';
+import {
+  getSystemMetrics,
+  getRecentActivity,
+  getInventoryByBloodType,
+  listDonors,
+  listHospitals,
+  listRequests
+} from '@controllers/admin.controller';
 import { authenticate, authorize } from '@middleware/auth.middleware';
 import { Role } from '@prisma/client';
 
@@ -33,5 +40,26 @@ router.get('/activity', getRecentActivity);
  * @access  Private (ADMIN)
  */
 router.get('/inventory', getInventoryByBloodType);
+
+/**
+ * @route   GET /api/v1/admin/donors
+ * @desc    Get all donors list
+ * @access  Private (ADMIN)
+ */
+router.get('/donors', listDonors);
+
+/**
+ * @route   GET /api/v1/admin/hospitals
+ * @desc    Get all hospitals list
+ * @access  Private (ADMIN)
+ */
+router.get('/hospitals', listHospitals);
+
+/**
+ * @route   GET /api/v1/admin/requests
+ * @desc    Get all requests list
+ * @access  Private (ADMIN)
+ */
+router.get('/requests', listRequests);
 
 export default router;

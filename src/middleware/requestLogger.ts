@@ -47,23 +47,22 @@ export const requestLogger = pinoHttp({
     return id;
   },
 
-  // Customize what gets logged for each request.
   customReceivedMessage: (req) => {
-    return `→ ${req.method} ${req.url}`;
+    return `→ ${String(req.method)} ${String(req.url)}`;
   },
 
   customSuccessMessage: (req, res) => {
-    return `← ${req.method} ${req.url} ${res.statusCode}`;
+    return `← ${String(req.method)} ${String(req.url)} ${res.statusCode.toString()}`;
   },
 
   customErrorMessage: (req, res, err) => {
-    return `← ${req.method} ${req.url} ${res.statusCode} — ${err.message}`;
+    return `← ${String(req.method)} ${String(req.url)} ${res.statusCode.toString()} — ${err.message}`;
   },
 
   // Customize the log level per status code range.
   customLogLevel: (_req, res, err) => {
-    if (err !== undefined || res.statusCode >= 500) return 'error';
-    if (res.statusCode >= 400) return 'warn';
+    if (err !== undefined || res.statusCode >= 500) {return 'error';}
+    if (res.statusCode >= 400) {return 'warn';}
     return 'info';
   },
 

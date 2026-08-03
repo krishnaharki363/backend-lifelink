@@ -86,19 +86,18 @@ const gracefulShutdown = (signal: string): void => {
   // sockets so server.close() callback fires immediately.
   destroyOpenSockets();
 
-  server.close(async () => {
+  server.close(() => {
     logger.info('HTTP server closed — port released');
 
-    try {
-      // Close the Prisma connection pool.
-      // This waits for any pending queries to complete before closing.
-      await disconnectDatabase();
-      logger.info('All connections closed. Exiting cleanly.');
-      process.exit(0); // 0 = intentional, clean exit
-    } catch (err) {
-      logger.error({ err }, 'Error during graceful shutdown');
-      process.exit(1); // 1 = error exit
-    }
+    disconnectDatabase()
+      .then(() => {
+        logger.info('All connections closed. Exiting cleanly.');
+        process.exit(0);
+      })
+      .catch((err: unknown) => {
+        logger.error({ err }, 'Error during graceful shutdown');
+        process.exit(1);
+      });
   });
 
   // Safety timeout — if graceful shutdown takes too long (e.g., a query hangs),
@@ -113,10 +112,10 @@ const gracefulShutdown = (signal: string): void => {
 // ─── Process Signal Handlers ──────────────────────────────────────────────────
 
 // Planned shutdown (Docker stop, Kubernetes pod termination, Render deploy)
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGTERM', () => { gracefulShutdown('SIGTERM'); });
 
 // Ctrl+C in terminal (development)
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGINT', () => { gracefulShutdown('SIGINT'); });
 
 // ─── Safety Net Error Handlers ────────────────────────────────────────────────
 
@@ -170,8 +169,8 @@ server.listen(env.PORT, () => {
     `🚀 LifeLink Backend started successfully`,
   );
 
-  logger.info(`📡 API available at: http://localhost:${env.PORT}/api/${env.API_VERSION}`);
-  logger.info(`❤️  Health check at: http://localhost:${env.PORT}/api/${env.API_VERSION}/health`);
+  logger.info(`📡 API available at: http://localhost:${env.PORT.toString()}/api/${env.API_VERSION}`);
+  logger.info(`❤️  Health check at: http://localhost:${env.PORT.toString()}/api/${env.API_VERSION}/health`);
 });
 
 // ─── Export for Testing ───────────────────────────────────────────────────────

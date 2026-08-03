@@ -21,7 +21,7 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '@config/env';
 import { AppError } from '@utils/AppError';
-import { Role } from '@prisma/client';
+import type { Role } from '@prisma/client';
 import type { JwtPayload } from '@services/auth.service';
 
 /**

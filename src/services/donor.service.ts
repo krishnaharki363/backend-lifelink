@@ -5,7 +5,8 @@
 
 import { prisma } from '@config/database';
 import { BloodType } from '@prisma/client';
-import type { SearchDonorsQuery } from '@validators/donor.validators';
+import type { SearchDonorsQuery, UpdateDonorProfileInput } from '@validators/donor.validators';
+import { AppError } from '@utils/AppError';
 
 // ─── Compatibility Logic ──────────────────────────────────────────────────────
 
@@ -124,4 +125,44 @@ export const searchCompatibleDonors = async (query: SearchDonorsQuery) => {
       compatibleTypesIncluded: compatibleTypes,
     },
   };
+};
+
+/**
+ * Retrieves the donor profile for a given user ID.
+ */
+export const getDonorProfile = async (userId: string) => {
+  const profile = await prisma.donorProfile.findUnique({
+    where: { userId },
+    include: {
+      user: {
+        select: {
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (!profile) {
+    throw AppError.notFound('Donor profile not found');
+  }
+
+  return profile;
+};
+
+/**
+ * Updates the donor profile for a given user ID.
+ */
+export const updateDonorProfile = async (userId: string, data: UpdateDonorProfileInput) => {
+  const profile = await prisma.donorProfile.findUnique({
+    where: { userId },
+  });
+
+  if (!profile) {
+    throw AppError.notFound('Donor profile not found');
+  }
+
+  return prisma.donorProfile.update({
+    where: { userId },
+    data,
+  });
 };

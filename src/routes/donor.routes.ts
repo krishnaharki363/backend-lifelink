@@ -1,19 +1,37 @@
-/**
- * @file donor.routes.ts
- * @description Routes for Donor APIs.
- */
-
 import { Router } from 'express';
 import { authenticate, authorize } from '@middleware/auth.middleware';
-import { validateQuery } from '@middleware/validateRequest';
+import { validateBody, validateQuery } from '@middleware/validateRequest';
 import * as donorController from '@controllers/donor.controller';
 import { Role } from '@prisma/client';
-import { searchDonorsQuerySchema } from '@validators/donor.validators';
+import { searchDonorsQuerySchema, updateDonorProfileSchema } from '@validators/donor.validators';
 
 const router = Router();
 
 // All donor routes require authentication
 router.use(authenticate);
+
+/**
+ * @route   GET /api/v1/donors/profile
+ * @desc    Get the current donor's profile
+ * @access  Donor only
+ */
+router.get(
+  '/profile',
+  authorize(Role.DONOR),
+  donorController.getProfile
+);
+
+/**
+ * @route   PUT /api/v1/donors/profile
+ * @desc    Update the current donor's profile
+ * @access  Donor only
+ */
+router.put(
+  '/profile',
+  authorize(Role.DONOR),
+  validateBody(updateDonorProfileSchema),
+  donorController.updateProfile
+);
 
 /**
  * @route   GET /api/v1/donors/search

@@ -38,8 +38,7 @@
  */
 
 import type { Response } from 'express';
-import type { HttpStatusCode } from '@constants/http.constants';
-import { HttpStatus, HttpMessage } from '@constants/http.constants';
+import { HttpStatus, HttpMessage, type HttpStatusCode } from '@constants/http.constants';
 import type { ErrorCode } from '@interfaces/error.interface';
 
 // ─── Response Interfaces ──────────────────────────────────────────────────────
@@ -97,6 +96,7 @@ export interface ApiErrorResponse {
  *   sendSuccess(res, { donors }, 'Donors retrieved successfully');
  *   sendSuccess(res, { user }, 'User created', HttpStatus.CREATED);
  */
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
 export const sendSuccess = <T>(
   res: Response,
   data: T,

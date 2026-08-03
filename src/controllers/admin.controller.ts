@@ -39,3 +39,33 @@ export const getInventoryByBloodType = catchAsync(async (_req: Request, res: Res
   const inventory = await adminService.getInventoryByBloodType();
   sendSuccess(res, inventory, 'Global inventory retrieved successfully', HttpStatus.OK);
 });
+
+/**
+ * GET /api/v1/admin/donors
+ * @desc Get all registered donors
+ * @access Private (ADMIN)
+ */
+export const listDonors = catchAsync(async (_req: Request, res: Response) => {
+  const result = await adminService.getAllDonors();
+  sendSuccess(res, result, 'All donors retrieved successfully', HttpStatus.OK);
+});
+
+/**
+ * GET /api/v1/admin/hospitals
+ * @desc Get all registered hospitals
+ * @access Private (ADMIN)
+ */
+export const listHospitals = catchAsync(async (_req: Request, res: Response) => {
+  const result = await adminService.getAllHospitals();
+  sendSuccess(res, result, 'All hospitals retrieved successfully', HttpStatus.OK);
+});
+
+/**
+ * GET /api/v1/admin/requests
+ * @desc Get all blood requests
+ * @access Private (ADMIN)
+ */
+export const listRequests = catchAsync(async (_req: Request, res: Response) => {
+  const result = await adminService.getAllRequests();
+  sendSuccess(res, result, 'All requests retrieved successfully', HttpStatus.OK);
+});

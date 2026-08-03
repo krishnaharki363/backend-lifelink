@@ -17,6 +17,8 @@ import { sendSuccess } from '@utils/apiResponse';
 import * as authService from '@services/auth.service';
 import { HttpStatus } from '@constants/http.constants';
 import { env } from '@config/env';
+import type { RegisterRequest, LoginRequest } from '@validators/auth.validators';
+import { AppError } from '@utils/AppError';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,7 +49,7 @@ const setRefreshTokenCookie = (res: Response, token: string): void => {
  */
 export const register = catchAsync(async (req: Request, res: Response): Promise<void> => {
   // 1. req.body is already validated by Zod at this point
-  const result = await authService.register(req.body);
+  const result = await authService.register(req.body as RegisterRequest);
 
   // 2. Set the refresh token securely in a cookie
   setRefreshTokenCookie(res, result.refreshToken);
@@ -68,7 +70,7 @@ export const register = catchAsync(async (req: Request, res: Response): Promise<
  * POST /api/v1/auth/login
  */
 export const login = catchAsync(async (req: Request, res: Response): Promise<void> => {
-  const result = await authService.login(req.body);
+  const result = await authService.login(req.body as LoginRequest);
 
   setRefreshTokenCookie(res, result.refreshToken);
 
@@ -89,7 +91,11 @@ export const login = catchAsync(async (req: Request, res: Response): Promise<voi
 export const refresh = catchAsync(async (req: Request, res: Response): Promise<void> => {
   // The refresh token can come from either the secure cookie OR the request body
   // (We check the cookie first as it's the most secure mechanism)
-  const token = (req.cookies.refreshToken as string) || req.body.refreshToken;
+  const token = (req.cookies.refreshToken as string | undefined) ?? ((req.body as Record<string, unknown>).refreshToken as string | undefined);
+
+  if (!token) {
+    throw AppError.badRequest('Refresh token is required');
+  }
 
   const result = await authService.refreshTokens(token);
 
@@ -107,6 +113,7 @@ export const refresh = catchAsync(async (req: Request, res: Response): Promise<v
  * POST /api/v1/auth/logout
  */
 export const logout = catchAsync(async (_req: Request, res: Response): Promise<void> => {
+  await Promise.resolve();
   // Clear the refresh token cookie
   res.clearCookie('refreshToken', {
     httpOnly: true,

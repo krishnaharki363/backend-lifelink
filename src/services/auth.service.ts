@@ -46,6 +46,7 @@ export interface AuthUserPayload {
   address?: string;
   gender?: string;
   availability?: string;
+  notificationsEnabled?: boolean;
   // Hospital / Blood Bank fields
   name?: string;
 }
@@ -92,7 +93,7 @@ const buildDonorUserPayload = (
     DonorProfile,
     | 'firstName' | 'lastName' | 'bloodType' | 'phone'
     | 'city' | 'state' | 'province' | 'district' | 'municipality' | 'address'
-    | 'gender' | 'availableToDonate'
+    | 'gender' | 'availableToDonate' | 'notificationsEnabled'
   >,
 ): AuthUserPayload => ({
   id: userId,
@@ -103,14 +104,15 @@ const buildDonorUserPayload = (
   lastName: profile.lastName,
   bloodType: bloodTypeToDisplay(profile.bloodType),
   phone: profile.phone,
-  city: profile.city ?? undefined,
-  state: profile.state ?? undefined,
+  city: profile.city,
+  state: profile.state,
   province: profile.province ?? undefined,
   district: profile.district ?? undefined,
   municipality: profile.municipality ?? undefined,
   address: profile.address ?? undefined,
   gender: profile.gender ?? undefined,
   availability: profile.availableToDonate ? 'Available' : 'Unavailable',
+  notificationsEnabled: profile.notificationsEnabled,
 });
 
 // ─── Business Logic ───────────────────────────────────────────────────────────
@@ -125,8 +127,9 @@ const buildDonorUserPayload = (
  *                                    availability, emergencyContact }
  */
 export const register = async (data: RegisterRequest): Promise<AuthResponse> => {
+  const email = data.email.toLowerCase();
   // 1. Email uniqueness check (also enforced by DB unique constraint)
-  const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
+  const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) {
     throw AppError.conflict('A user with this email address already exists');
   }
@@ -137,7 +140,7 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
   // 3. Transactional create
   const { user, donorProfile } = await prisma.$transaction(async (tx) => {
     const createdUser = await tx.user.create({
-      data: { email: data.email, passwordHash, role: data.role },
+      data: { email, passwordHash, role: data.role },
     });
 
     let createdDonorProfile: DonorProfile | null = null;
@@ -153,8 +156,8 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
         firstName = parts[0] ?? data.fullName;
         lastName = parts.length > 1 ? parts.slice(1).join(' ') : '';
       } else {
-        firstName = ('firstName' in data ? data.firstName : '') ?? '';
-        lastName = ('lastName' in data ? data.lastName : '') ?? '';
+        firstName = 'firstName' in data ? data.firstName : '';
+        lastName = 'lastName' in data ? data.lastName : '';
       }
 
       // ── Determine blood type ─────────────────────────────────────────────
@@ -190,11 +193,9 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
           firstName,
           lastName,
           bloodType: resolvedBloodType,
-          dateOfBirth: 'dateOfBirth' in data && data.dateOfBirth
-            ? (data.dateOfBirth instanceof Date ? data.dateOfBirth : new Date(data.dateOfBirth as string))
-            : new Date('2000-01-01'),
+          dateOfBirth: 'dateOfBirth' in data ? data.dateOfBirth : new Date('2000-01-01'),
           phone: data.phone,
-          gender: ('gender' in data ? data.gender : undefined) ?? undefined,
+          gender: 'gender' in data ? data.gender : undefined,
 
           // Location
           province,
@@ -233,7 +234,7 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
           phone: data.phone,
         },
       });
-    } else if (data.role === Role.BLOOD_BANK) {
+    } else {
       await tx.bloodBankProfile.create({
         data: {
           userId: createdUser.id,
@@ -303,14 +304,15 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     }
   }
 
+  const email = data.email.toLowerCase();
   const user = await prisma.user.findFirst({
-    where: { email: data.email, isActive: true },
+    where: { email, isActive: true },
   });
 
-  if (!user) throw AppError.unauthorized('Invalid email or password');
+  if (!user) {throw AppError.unauthorized('Invalid email or password');}
 
   const isPasswordValid = await bcrypt.compare(data.password, user.passwordHash);
-  if (!isPasswordValid) throw AppError.unauthorized('Invalid email or password');
+  if (!isPasswordValid) {throw AppError.unauthorized('Invalid email or password');}
 
   const tokens = generateTokens({ userId: user.id, role: user.role, email: user.email });
 
@@ -362,11 +364,11 @@ export const refreshTokens = async (refreshToken: string): Promise<AuthTokens> =
       where: { id: decoded.userId, isActive: true },
     });
 
-    if (!user) throw AppError.unauthorized('User no longer exists or has been disabled');
+    if (!user) {throw AppError.unauthorized('User no longer exists or has been disabled');}
 
     return generateTokens({ userId: user.id, role: user.role, email: user.email });
   } catch (error) {
-    if (error instanceof AppError) throw error;
+    if (error instanceof AppError) {throw error;}
     throw AppError.unauthorized('Invalid or expired refresh token');
   }
 };

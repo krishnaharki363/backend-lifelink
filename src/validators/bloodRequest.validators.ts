@@ -51,6 +51,8 @@ export const getBloodRequestsQuerySchema = z.object({
   bloodType: bloodTypeSchema.optional(),
   status: z.nativeEnum(RequestStatus).optional(),
   urgency: z.nativeEnum(RequestUrgency).optional(),
+  hospitalId: z.string().uuid().optional(),
+  matchedBloodBankId: z.string().uuid().optional(),
 });
 
 export type GetBloodRequestsQuery = z.infer<typeof getBloodRequestsQuerySchema>;

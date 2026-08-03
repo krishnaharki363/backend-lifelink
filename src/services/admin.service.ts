@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '@config/database';
-import { Role, RequestStatus } from '@prisma/client';
+import { RequestStatus, type Role } from '@prisma/client';
 
 export const getSystemMetrics = async () => {
   // Execute independent aggregation queries concurrently for performance
@@ -49,7 +49,7 @@ export const getSystemMetrics = async () => {
       byRole: usersByRole,
     },
     activeBloodRequests: activeRequests,
-    totalBloodUnitsAvailable: totalInventoryResult._sum.unitsAvailable || 0,
+    totalBloodUnitsAvailable: totalInventoryResult._sum.unitsAvailable ?? 0,
   };
 };
 
@@ -95,6 +95,79 @@ export const getInventoryByBloodType = async () => {
 
   return inventoryGroups.map((group) => ({
     bloodType: group.bloodType,
-    totalUnits: group._sum.unitsAvailable || 0,
+    totalUnits: group._sum.unitsAvailable ?? 0,
   }));
+};
+
+/**
+ * Retrieves all registered donors for administration.
+ */
+export const getAllDonors = async () => {
+  return prisma.donorProfile.findMany({
+    include: {
+      user: {
+        select: {
+          email: true,
+          isActive: true,
+        },
+      },
+    },
+    orderBy: {
+      lastName: 'asc',
+    },
+  });
+};
+
+/**
+ * Retrieves all registered hospitals for administration.
+ */
+export const getAllHospitals = async () => {
+  return prisma.hospitalProfile.findMany({
+    include: {
+      user: {
+        select: {
+          email: true,
+          isActive: true,
+        },
+      },
+      bloodRequests: {
+        select: {
+          id: true,
+        },
+      },
+    },
+    orderBy: {
+      name: 'asc',
+    },
+  });
+};
+
+/**
+ * Retrieves all platform blood requests for administration.
+ */
+export const getAllRequests = async () => {
+  return prisma.bloodRequest.findMany({
+    include: {
+      hospital: {
+        select: {
+          name: true,
+          address: true,
+        },
+      },
+      matchedDonor: {
+        select: {
+          firstName: true,
+          lastName: true,
+        },
+      },
+      matchedBloodBank: {
+        select: {
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
 };

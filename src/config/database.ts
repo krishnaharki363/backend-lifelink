@@ -134,7 +134,7 @@ const createPrismaClient = (): PrismaClient => {
  * casting to `any`.
  */
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __prisma: PrismaClient | undefined;
 }
 

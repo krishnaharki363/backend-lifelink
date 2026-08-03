@@ -73,10 +73,10 @@ const formatUptime = (seconds: number): string => {
   const secs = Math.floor(seconds % 60);
 
   const parts: string[] = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0) parts.push(`${minutes}m`);
-  parts.push(`${secs}s`);
+  if (days > 0) {parts.push(`${days.toString()}d`);}
+  if (hours > 0) {parts.push(`${hours.toString()}h`);}
+  if (minutes > 0) {parts.push(`${minutes.toString()}m`);}
+  parts.push(`${secs.toString()}s`);
 
   return parts.join(' ');
 };
@@ -138,7 +138,7 @@ export const getHealth = catchAsync(async (_req: Request, res: Response): Promis
     uptime: Math.floor(uptimeSeconds),
     uptimeFormatted: formatUptime(uptimeSeconds),
     environment: env.NODE_ENV,
-    version: process.env['npm_package_version'] ?? '1.0.0',
+    version: process.env.npm_package_version ?? '1.0.0',
     services: {
       database: databaseStatus,
     },

@@ -56,9 +56,31 @@ router.get('/:id', bloodRequestController.getRequestById);
  */
 router.patch(
   '/:id/status',
-  authorize(Role.HOSPITAL, Role.ADMIN),
+  authorize(Role.HOSPITAL, Role.BLOOD_BANK, Role.ADMIN),
   validateBody(updateBloodRequestStatusSchema),
   bloodRequestController.updateStatus
+);
+
+/**
+ * @route   POST /api/v1/blood-requests/:id/accept
+ * @desc    Accept a blood request directly
+ * @access  Donor only
+ */
+router.post(
+  '/:id/accept',
+  authorize(Role.DONOR),
+  bloodRequestController.acceptRequest
+);
+
+/**
+ * @route   POST /api/v1/blood-requests/:id/confirm-inventory
+ * @desc    Confirm delivery of inventory match
+ * @access  Blood Bank only
+ */
+router.post(
+  '/:id/confirm-inventory',
+  authorize(Role.BLOOD_BANK),
+  bloodRequestController.confirmInventory
 );
 
 export default router;

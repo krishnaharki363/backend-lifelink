@@ -67,6 +67,7 @@ export const getSystemInventory = async () => {
           name: true,
           address: true,
           phone: true,
+          userId: true,
         },
       },
     },

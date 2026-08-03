@@ -38,8 +38,7 @@ import { sendError } from '@utils/apiResponse';
 import { createContextLogger } from '@config/logger';
 import { isProduction } from '@config/env';
 import { HttpStatus } from '@constants/http.constants';
-import { ErrorCode } from '@interfaces/error.interface';
-import type { IValidationError } from '@interfaces/error.interface';
+import { ErrorCode, type IValidationError } from '@interfaces/error.interface';
 
 const log = createContextLogger('ErrorHandler');
 
@@ -57,7 +56,8 @@ const handlePrismaKnownError = (err: Prisma.PrismaClientKnownRequestError): AppE
   switch (err.code) {
     case 'P2002': {
       // Extract the conflicting field name from Prisma's meta object
-      const fields = (err.meta?.target as string[])?.join(', ') ?? 'field';
+      const target = err.meta?.target as string[] | undefined;
+      const fields = target ? target.join(', ') : 'field';
       return new AppError(
         `A record with this ${fields} already exists`,
         HttpStatus.CONFLICT,
@@ -143,7 +143,7 @@ const handleJWTExpiredError = (_err: TokenExpiredError): AppError =>
  */
 const classifyError = (err: unknown): AppError => {
   // Already an AppError — no conversion needed
-  if (isAppError(err)) return err;
+  if (isAppError(err)) {return err;}
 
   // Prisma known errors (constraint violations, record not found, etc.)
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
@@ -205,7 +205,7 @@ export const errorHandler = (
   err: unknown,
   req: Request,
   res: Response,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   _next: NextFunction,
 ): void => {
   // Classify the error into a normalized AppError
