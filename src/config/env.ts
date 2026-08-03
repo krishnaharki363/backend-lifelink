@@ -119,7 +119,7 @@ const envSchema = z.object({
     .optional()
     .default('12')
     .transform((val) => parseInt(val, 10))
-    .pipe(z.number().int().min(10).max(14)), // <10 is insecure, >14 is too slow
+    .pipe(z.number().int().min(4).max(14)), // <4 is invalid, >14 is too slow
 
   // ── Logging ────────────────────────────────────────────────────────────
   LOG_LEVEL: z
