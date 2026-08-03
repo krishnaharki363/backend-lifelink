@@ -143,7 +143,8 @@ process.on('uncaughtException', (err: Error) => {
  * We handle it explicitly for consistent logging and clean shutdown.
  */
 process.on('unhandledRejection', (reason: unknown) => {
-  logger.fatal({ reason }, 'UNHANDLED PROMISE REJECTION — shutting down immediately');
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  logger.fatal({ err }, 'UNHANDLED PROMISE REJECTION — shutting down immediately');
   destroyOpenSockets();
   server.close(() => {
     process.exit(1);
