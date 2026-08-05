@@ -21,7 +21,7 @@ beforeAll(async () => {
   await prisma.user.deleteMany({
     where: {
       email: {
-        endsWith: '@lifelink.app',
+        endsWith: '@test.lifelink.app',
       },
     },
   });
@@ -32,7 +32,7 @@ afterAll(async () => {
   await prisma.user.deleteMany({
     where: {
       email: {
-        endsWith: '@lifelink.app',
+        endsWith: '@test.lifelink.app',
       },
     },
   });
@@ -43,7 +43,7 @@ afterAll(async () => {
 // ─── Test Data ────────────────────────────────────────────────────────────────
 
 const mockDonor = {
-  email: 'testdonor@lifelink.app',
+  email: 'testdonor@test.lifelink.app',
   password: 'SecurePassword123',
   role: Role.DONOR,
   firstName: 'John',
@@ -68,7 +68,7 @@ describe('Authentication Endpoints', () => {
       // Verify response envelope
       expect(response.body.success).toBe(true);
       expect(response.body.message).toBe('Registration successful');
-      
+
       // Verify data payload
       expect(response.body.data).toHaveProperty('accessToken');
       expect(response.body.data.user.email).toBe(mockDonor.email);
@@ -95,7 +95,7 @@ describe('Authentication Endpoints', () => {
       const response = await request(app)
         .post('/api/v1/auth/register')
         .send({
-          email: 'invalid@lifelink.app',
+          email: 'invalid@test.lifelink.app',
           // Missing password, role, and profile fields
         })
         .expect(HttpStatus.UNPROCESSABLE_ENTITY);
@@ -142,12 +142,10 @@ describe('Authentication Endpoints', () => {
 
   describe('POST /api/v1/auth/logout', () => {
     it('should clear the refresh token cookie', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/logout')
-        .expect(HttpStatus.OK);
+      const response = await request(app).post('/api/v1/auth/logout').expect(HttpStatus.OK);
 
       expect(response.body.success).toBe(true);
-      
+
       const cookies = response.headers['set-cookie'] as unknown as string[];
       expect(cookies).toBeDefined();
       expect(cookies.some((c: string) => c.includes('refreshToken=;'))).toBe(true);

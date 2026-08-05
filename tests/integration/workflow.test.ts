@@ -22,57 +22,51 @@ describe('LifeLink Workflow Integration', () => {
     await prisma.user.deleteMany({
       where: {
         email: {
-          endsWith: '@lifelink.app',
+          endsWith: '@test.lifelink.app',
         },
       },
     });
 
     // 1. Register Donor
-    const donorRes = await request(app)
-      .post('/api/v1/auth/register')
-      .send({
-        email: 'donor@lifelink.app',
-        password: 'Password123',
-        role: Role.DONOR,
-        firstName: 'Dave',
-        lastName: 'Donor',
-        bloodType: BloodType.O_NEG,
-        dateOfBirth: '1995-05-05',
-        phone: '9841000000',
-        city: 'Kathmandu',
-        state: 'Bagmati'
-      });
+    const donorRes = await request(app).post('/api/v1/auth/register').send({
+      email: 'donor@test.lifelink.app',
+      password: 'Password123',
+      role: Role.DONOR,
+      firstName: 'Dave',
+      lastName: 'Donor',
+      bloodType: BloodType.O_NEG,
+      dateOfBirth: '1995-05-05',
+      phone: '9841000000',
+      city: 'Kathmandu',
+      state: 'Bagmati',
+    });
     donorToken = donorRes.body.data.accessToken;
     donorId = donorRes.body.data.user.id;
 
     // 2. Register Hospital
-    const hospRes = await request(app)
-      .post('/api/v1/auth/register')
-      .send({
-        email: 'hosp@lifelink.app',
-        password: 'Password123',
-        role: Role.HOSPITAL,
-        name: 'Kathmandu General',
-        licenseNumber: 'HOSP-12345',
-        address: 'Kalimati, Kathmandu',
-        contactPerson: 'Dr. Sita',
-        phone: '014400000'
-      });
+    const hospRes = await request(app).post('/api/v1/auth/register').send({
+      email: 'hosp@test.lifelink.app',
+      password: 'Password123',
+      role: Role.HOSPITAL,
+      name: 'Kathmandu General',
+      licenseNumber: 'HOSP-12345',
+      address: 'Kalimati, Kathmandu',
+      contactPerson: 'Dr. Sita',
+      phone: '014400000',
+    });
     hospitalToken = hospRes.body.data.accessToken;
 
     // 3. Register Blood Bank
-    const bankRes = await request(app)
-      .post('/api/v1/auth/register')
-      .send({
-        email: 'bank@lifelink.app',
-        password: 'Password123',
-        role: Role.BLOOD_BANK,
-        name: 'Central Blood Bank',
-        licenseNumber: 'BANK-54321',
-        address: 'Red Cross Marg',
-        contactPerson: 'Ram Bahadur',
-        phone: '015500000'
-      });
+    const bankRes = await request(app).post('/api/v1/auth/register').send({
+      email: 'bank@test.lifelink.app',
+      password: 'Password123',
+      role: Role.BLOOD_BANK,
+      name: 'Central Blood Bank',
+      licenseNumber: 'BANK-54321',
+      address: 'Red Cross Marg',
+      contactPerson: 'Ram Bahadur',
+      phone: '015500000',
+    });
     bankToken = bankRes.body.data.accessToken;
 
     // Resolve profile IDs
@@ -92,7 +86,7 @@ describe('LifeLink Workflow Integration', () => {
     await prisma.user.deleteMany({
       where: {
         email: {
-          endsWith: '@lifelink.app',
+          endsWith: '@test.lifelink.app',
         },
       },
     });
@@ -115,7 +109,7 @@ describe('LifeLink Workflow Integration', () => {
           unitsRequired: 2,
           urgency: RequestUrgency.URGENT,
           requiredByDate: tomorrow.toISOString(),
-          notes: 'Emergency operation'
+          notes: 'Emergency operation',
         })
         .expect(HttpStatus.CREATED);
 
@@ -125,12 +119,12 @@ describe('LifeLink Workflow Integration', () => {
       // Verify the donor received a notification
       const donorUser = await prisma.donorProfile.findUnique({
         where: { id: donorId },
-        include: { user: true }
+        include: { user: true },
       });
-      
+
       expect(donorUser).toBeDefined();
       const alerts = await prisma.notification.findMany({
-        where: { userId: donorUser?.userId, type: 'REQUEST_ALERT' }
+        where: { userId: donorUser?.userId, type: 'REQUEST_ALERT' },
       });
       expect(alerts.length).toBeGreaterThan(0);
     });
@@ -172,7 +166,7 @@ describe('LifeLink Workflow Integration', () => {
           requiredByDate: tomorrow.toISOString(),
         });
       requestForApptId = reqRes.body.data.id;
-      
+
       await request(app)
         .post(`/api/v1/blood-requests/${requestForApptId}/accept`)
         .set('Authorization', `Bearer ${donorToken}`);
@@ -189,7 +183,7 @@ describe('LifeLink Workflow Integration', () => {
           bloodBankId: bankId,
           bloodRequestId: requestForApptId,
           appointmentDate: tomorrow.toISOString().split('T')[0],
-          slot: '11:00'
+          slot: '11:00',
         })
         .expect(HttpStatus.CREATED);
 
@@ -215,9 +209,9 @@ describe('LifeLink Workflow Integration', () => {
         where: {
           bloodBankId_bloodType: {
             bloodBankId: bankId,
-            bloodType: BloodType.O_NEG
-          }
-        }
+            bloodType: BloodType.O_NEG,
+          },
+        },
       });
       expect(inv).toBeDefined();
       expect(inv?.unitsAvailable).toBe(1);
