@@ -13,7 +13,7 @@ import { bloodTypeSchema } from './common';
 export const createBloodRequestSchema = z.object({
   patientName: z.string().min(2, 'Patient name must be at least 2 characters'),
   bloodType: bloodTypeSchema,
-  unitsRequired: z.number().int().positive('Units required must be at least 1'),
+  unitsRequired: z.number().int().min(1).max(20, 'Units required cannot exceed 20'),
   urgency: z.nativeEnum(RequestUrgency).optional().default(RequestUrgency.NORMAL),
 
   // Accept ISO strings and coerce them into Date objects.
@@ -21,7 +21,7 @@ export const createBloodRequestSchema = z.object({
   requiredByDate: z.string().pipe(
     z.coerce.date().refine((date) => date > new Date(), {
       message: 'Required by date must be in the future',
-    })
+    }),
   ),
 
   // Ward / department — sent by HospitalDashboard "New Request" modal

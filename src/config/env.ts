@@ -18,10 +18,12 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
-// Load .env file before validation runs.
-// In production (Render, Docker), env vars are injected directly
-// by the platform, so dotenv is effectively a no-op there.
-dotenv.config();
+// Tests use a separate file so the integration suite cannot accidentally load
+// a developer or production database from .env. In production (Render,
+// Docker), env vars are injected directly by the platform.
+dotenv.config({
+  path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
+});
 
 // ─── Schema Definition ──────────────────────────────────────────────────────
 
@@ -71,6 +73,11 @@ const envSchema = z.object({
 
   JWT_ACCESS_EXPIRES_IN: z.string().min(1).default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().min(1).default('7d'),
+
+  // Optional bootstrap credentials used only by `npm run admin:seed`.
+  // The API never creates an administrator during login.
+  ADMIN_EMAIL: z.string().email().optional(),
+  ADMIN_PASSWORD: z.string().min(16).optional(),
 
   // ── CORS ───────────────────────────────────────────────────────────────
   // Comma-separated list of allowed origins e.g. "http://localhost:3000,https://app.lifelink.com"

@@ -14,6 +14,7 @@ model User {
   email            String            @unique
   passwordHash     String
   role             Role
+  verificationStatus VerificationStatus @default(APPROVED)
   isEmailVerified  Boolean           @default(false)
   isActive         Boolean           @default(true)
   createdAt        DateTime          @default(now())
@@ -138,6 +139,7 @@ model BloodInventory {
   bloodBankId    String           @db.Uuid
   bloodType      BloodType
   unitsAvailable Int              @default(0)
+  unitsReserved  Int              @default(0)
   lastUpdated    DateTime         @updatedAt
   bloodBank      BloodBankProfile @relation(fields: [bloodBankId], references: [id], onDelete: Cascade)
 
@@ -180,6 +182,12 @@ enum Role {
   HOSPITAL
   BLOOD_BANK
   ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum BloodType {

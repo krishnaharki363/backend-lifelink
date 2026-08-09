@@ -1,6 +1,6 @@
 /**
  * @file admin.controller.ts
- * @description Controllers for Admin Analytics. 
+ * @description Controllers for Admin Analytics.
  * These endpoints are strictly protected by RBAC (ADMIN role only).
  */
 
@@ -9,6 +9,7 @@ import { catchAsync } from '@utils/asyncWrapper';
 import { sendSuccess } from '@utils/apiResponse';
 import { HttpStatus } from '@constants/http.constants';
 import * as adminService from '@services/admin.service';
+import type { UpdateVerificationStatusInput } from '@validators/admin.validators';
 
 /**
  * GET /api/v1/admin/metrics
@@ -68,4 +69,22 @@ export const listHospitals = catchAsync(async (_req: Request, res: Response) => 
 export const listRequests = catchAsync(async (_req: Request, res: Response) => {
   const result = await adminService.getAllRequests();
   sendSuccess(res, result, 'All requests retrieved successfully', HttpStatus.OK);
+});
+
+export const listPendingOrganizations = catchAsync(async (_req: Request, res: Response) => {
+  const result = await adminService.getPendingOrganizations();
+  sendSuccess(res, result, 'Pending organizations retrieved successfully', HttpStatus.OK);
+});
+
+export const updateOrganizationVerification = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.params.userId;
+  if (!userId) {
+    res.status(HttpStatus.BAD_REQUEST).json({ success: false, message: 'User ID is required' });
+    return;
+  }
+  const result = await adminService.updateOrganizationVerification(
+    userId,
+    (req.body as UpdateVerificationStatusInput).status,
+  );
+  sendSuccess(res, result, 'Organization verification updated successfully', HttpStatus.OK);
 });

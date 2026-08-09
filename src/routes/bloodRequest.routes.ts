@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express';
-import { authenticate, authorize } from '@middleware/auth.middleware';
+import { authenticate, authorize, requireApprovedAccount } from '@middleware/auth.middleware';
 import { validateBody, validateQuery } from '@middleware/validateRequest';
 import * as bloodRequestController from '@controllers/bloodRequest.controller';
 import { Role } from '@prisma/client';
@@ -17,7 +17,7 @@ import {
 const router = Router();
 
 // All blood request routes require the user to be authenticated
-router.use(authenticate);
+router.use(authenticate, requireApprovedAccount);
 
 /**
  * @route   POST /api/v1/blood-requests
@@ -28,7 +28,7 @@ router.post(
   '/',
   authorize(Role.HOSPITAL),
   validateBody(createBloodRequestSchema),
-  bloodRequestController.createRequest
+  bloodRequestController.createRequest,
 );
 
 /**
@@ -36,11 +36,7 @@ router.post(
  * @desc    Get all active blood requests with pagination/filters
  * @access  All authenticated users (Donors need to see them to donate)
  */
-router.get(
-  '/',
-  validateQuery(getBloodRequestsQuerySchema),
-  bloodRequestController.getRequests
-);
+router.get('/', validateQuery(getBloodRequestsQuerySchema), bloodRequestController.getRequests);
 
 /**
  * @route   GET /api/v1/blood-requests/:id
@@ -58,7 +54,7 @@ router.patch(
   '/:id/status',
   authorize(Role.HOSPITAL, Role.BLOOD_BANK, Role.ADMIN),
   validateBody(updateBloodRequestStatusSchema),
-  bloodRequestController.updateStatus
+  bloodRequestController.updateStatus,
 );
 
 /**
@@ -66,11 +62,7 @@ router.patch(
  * @desc    Accept a blood request directly
  * @access  Donor only
  */
-router.post(
-  '/:id/accept',
-  authorize(Role.DONOR),
-  bloodRequestController.acceptRequest
-);
+router.post('/:id/accept', authorize(Role.DONOR), bloodRequestController.acceptRequest);
 
 /**
  * @route   POST /api/v1/blood-requests/:id/confirm-inventory
@@ -80,7 +72,18 @@ router.post(
 router.post(
   '/:id/confirm-inventory',
   authorize(Role.BLOOD_BANK),
-  bloodRequestController.confirmInventory
+  bloodRequestController.confirmInventory,
+);
+
+/**
+ * @route   POST /api/v1/blood-requests/:id/claim-inventory
+ * @desc    A blood bank claims an open request using reserved stock
+ * @access  Blood Bank only
+ */
+router.post(
+  '/:id/claim-inventory',
+  authorize(Role.BLOOD_BANK),
+  bloodRequestController.claimInventory,
 );
 
 export default router;

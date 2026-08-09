@@ -33,13 +33,24 @@ import { AppError } from '@utils/AppError';
  * HTTP-only cookies cannot be read by JavaScript. The browser automatically
  * includes them in subsequent requests to the same domain.
  */
+const refreshTokenCookieOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  // The frontend and API are commonly deployed on different sites. In
+  // production the refresh cookie must be sent cross-site; Secure is required
+  // by browsers when SameSite=None is used. Local development stays strict.
+  sameSite: env.NODE_ENV === 'production' ? ('none' as const) : ('strict' as const),
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+
+const clearRefreshTokenCookieOptions = {
+  httpOnly: refreshTokenCookieOptions.httpOnly,
+  secure: refreshTokenCookieOptions.secure,
+  sameSite: refreshTokenCookieOptions.sameSite,
+};
+
 const setRefreshTokenCookie = (res: Response, token: string): void => {
-  res.cookie('refreshToken', token, {
-    httpOnly: true, // Prevent XSS access
-    secure: env.NODE_ENV === 'production', // Send only over HTTPS in production
-    sameSite: 'strict', // Prevent CSRF attacks
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (should match JWT_REFRESH_EXPIRES_IN)
-  });
+  res.cookie('refreshToken', token, refreshTokenCookieOptions);
 };
 
 // ─── Controller Methods ───────────────────────────────────────────────────────
@@ -91,10 +102,12 @@ export const login = catchAsync(async (req: Request, res: Response): Promise<voi
 export const refresh = catchAsync(async (req: Request, res: Response): Promise<void> => {
   // The refresh token can come from either the secure cookie OR the request body
   // (We check the cookie first as it's the most secure mechanism)
-  const token = (req.cookies.refreshToken as string | undefined) ?? ((req.body as Record<string, unknown>).refreshToken as string | undefined);
+  const token =
+    (req.cookies.refreshToken as string | undefined) ??
+    ((req.body as Record<string, unknown>).refreshToken as string | undefined);
 
   if (!token) {
-    throw AppError.badRequest('Refresh token is required');
+    throw AppError.unauthorized('Refresh token is required');
   }
 
   const result = await authService.refreshTokens(token);
@@ -115,11 +128,7 @@ export const refresh = catchAsync(async (req: Request, res: Response): Promise<v
 export const logout = catchAsync(async (_req: Request, res: Response): Promise<void> => {
   await Promise.resolve();
   // Clear the refresh token cookie
-  res.clearCookie('refreshToken', {
-    httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'strict',
-  });
+  res.clearCookie('refreshToken', clearRefreshTokenCookieOptions);
 
   sendSuccess(res, null, 'Logged out successfully', HttpStatus.OK);
 });

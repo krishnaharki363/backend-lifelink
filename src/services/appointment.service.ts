@@ -6,8 +6,18 @@
 import { prisma } from '@config/database';
 import { AppError } from '@utils/AppError';
 import { Role, AppointmentStatus, RequestStatus } from '@prisma/client';
-import type { CreateAppointmentInput, UpdateAppointmentStatusInput } from '@validators/appointment.validators';
+import type {
+  CreateAppointmentInput,
+  UpdateAppointmentStatusInput,
+} from '@validators/appointment.validators';
 import * as notificationService from '@services/notification.service';
+
+const VALID_APPOINTMENT_TRANSITIONS: Record<AppointmentStatus, AppointmentStatus[]> = {
+  [AppointmentStatus.PENDING]: [AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED],
+  [AppointmentStatus.CONFIRMED]: [AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED],
+  [AppointmentStatus.COMPLETED]: [],
+  [AppointmentStatus.CANCELLED]: [],
+};
 
 /**
  * Creates a new donation appointment.
@@ -29,6 +39,33 @@ export const createAppointment = async (userId: string, data: CreateAppointmentI
 
   if (!bloodBank) {
     throw AppError.notFound('Donation center/blood bank not found');
+  }
+
+  // A linked appointment represents the donor fulfilling the request they
+  // accepted. Do not allow a donor to attach another donor's request (or a
+  // request that has already been fulfilled/cancelled).
+  if (data.bloodRequestId) {
+    const bloodRequest = await prisma.bloodRequest.findUnique({
+      where: { id: data.bloodRequestId },
+      select: {
+        matchedDonorId: true,
+        status: true,
+      },
+    });
+
+    if (!bloodRequest) {
+      throw AppError.notFound('Blood request not found');
+    }
+
+    if (bloodRequest.matchedDonorId !== donorProfile.id) {
+      throw AppError.forbidden('You can only book appointments for requests matched to you');
+    }
+
+    if (bloodRequest.status !== RequestStatus.MATCHED_DONOR) {
+      throw AppError.conflict(
+        `A linked appointment cannot be booked for a ${bloodRequest.status} request`,
+      );
+    }
   }
 
   // 3. Create appointment
@@ -53,7 +90,7 @@ export const createAppointment = async (userId: string, data: CreateAppointmentI
     userId,
     'Appointment Booked',
     `Your donation appointment at ${bloodBank.name} has been booked for ${new Date(data.appointmentDate).toLocaleDateString()} at ${data.slot}.`,
-    'APPOINTMENT_BOOKED'
+    'APPOINTMENT_BOOKED',
   );
 
   // Notify blood bank
@@ -61,7 +98,7 @@ export const createAppointment = async (userId: string, data: CreateAppointmentI
     bloodBank.userId,
     'New Appointment Request',
     `Donor ${donorProfile.firstName} ${donorProfile.lastName} (${donorProfile.bloodType}) has booked an appointment for ${new Date(data.appointmentDate).toLocaleDateString()} at ${data.slot}.`,
-    'APPOINTMENT_REQUESTED'
+    'APPOINTMENT_REQUESTED',
   );
 
   return appointment;
@@ -128,7 +165,7 @@ export const updateAppointmentStatus = async (
   id: string,
   userId: string,
   role: Role,
-  data: UpdateAppointmentStatusInput
+  data: UpdateAppointmentStatusInput,
 ) => {
   const appointment = await prisma.appointment.findUnique({
     where: { id },
@@ -160,6 +197,10 @@ export const updateAppointmentStatus = async (
     }
   } else if (role !== Role.ADMIN) {
     throw AppError.forbidden('Unauthorized role');
+  }
+
+  if (!VALID_APPOINTMENT_TRANSITIONS[appointment.status].includes(newStatus)) {
+    throw AppError.conflict(`Cannot change appointment from ${appointment.status} to ${newStatus}`);
   }
 
   // Perform status transitions in database transaction
@@ -203,7 +244,11 @@ export const updateAppointmentStatus = async (
           include: { hospital: { include: { user: true } } },
         });
 
-        if (req && req.status !== RequestStatus.FULFILLED && req.status !== RequestStatus.CANCELLED) {
+        if (
+          req &&
+          req.status !== RequestStatus.FULFILLED &&
+          req.status !== RequestStatus.CANCELLED
+        ) {
           await tx.bloodRequest.update({
             where: { id: appointment.bloodRequestId },
             data: { status: RequestStatus.FULFILLED },
@@ -231,23 +276,24 @@ export const updateAppointmentStatus = async (
       appointment.donor.user.id,
       'Appointment Confirmed',
       `Your appointment at ${appointment.bloodBank.name} has been confirmed.`,
-      'APPOINTMENT_CONFIRMED'
+      'APPOINTMENT_CONFIRMED',
     );
   } else if (newStatus === AppointmentStatus.CANCELLED) {
-    const notifierId = role === Role.DONOR ? appointment.bloodBank.user.id : appointment.donor.user.id;
+    const notifierId =
+      role === Role.DONOR ? appointment.bloodBank.user.id : appointment.donor.user.id;
     const actorName = role === Role.DONOR ? 'Donor' : 'Donation center';
     await notificationService.createNotification(
       notifierId,
       'Appointment Cancelled',
       `Your appointment has been cancelled by the ${actorName.toLowerCase()}.`,
-      'APPOINTMENT_CANCELLED'
+      'APPOINTMENT_CANCELLED',
     );
   } else if (newStatus === AppointmentStatus.COMPLETED) {
     await notificationService.createNotification(
       appointment.donor.user.id,
       'Donation Completed',
       `Thank you for donating blood at ${appointment.bloodBank.name}! Your donor profile is updated.`,
-      'DONATION_COMPLETED'
+      'DONATION_COMPLETED',
     );
   }
 

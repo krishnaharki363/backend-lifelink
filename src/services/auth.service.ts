@@ -9,6 +9,10 @@ import { prisma } from '@config/database';
 import { env } from '@config/env';
 import { AppError } from '@utils/AppError';
 import { Role, type DonorProfile } from '@prisma/client';
+import {
+  VerificationStatus,
+  type VerificationStatus as VerificationStatusType,
+} from '@constants/verification.constants';
 import type { RegisterRequest, LoginRequest } from '@validators/auth.validators';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -17,6 +21,7 @@ export interface JwtPayload {
   userId: string;
   role: Role;
   email: string;
+  verificationStatus?: VerificationStatusType;
 }
 
 export interface AuthTokens {
@@ -32,6 +37,7 @@ export interface AuthUserPayload {
   id: string;
   email: string;
   role: Role;
+  verificationStatus: VerificationStatusType;
   isEmailVerified: boolean;
   // Donor fields
   firstName?: string;
@@ -55,6 +61,12 @@ export interface AuthResponse extends AuthTokens {
   user: AuthUserPayload;
 }
 
+interface UserWithVerificationStatus {
+  verificationStatus: VerificationStatusType;
+}
+const getVerificationStatus = (user: unknown): VerificationStatusType =>
+  (user as UserWithVerificationStatus).verificationStatus;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const generateTokens = (payload: JwtPayload): AuthTokens => {
@@ -73,10 +85,14 @@ const generateTokens = (payload: JwtPayload): AuthTokens => {
  */
 const bloodTypeToDisplay = (bt: string): string => {
   const map: Record<string, string> = {
-    A_POS: 'A+', A_NEG: 'A-',
-    B_POS: 'B+', B_NEG: 'B-',
-    AB_POS: 'AB+', AB_NEG: 'AB-',
-    O_POS: 'O+', O_NEG: 'O-',
+    A_POS: 'A+',
+    A_NEG: 'A-',
+    B_POS: 'B+',
+    B_NEG: 'B-',
+    AB_POS: 'AB+',
+    AB_NEG: 'AB-',
+    O_POS: 'O+',
+    O_NEG: 'O-',
   };
   return map[bt] ?? bt;
 };
@@ -89,16 +105,28 @@ const buildDonorUserPayload = (
   email: string,
   role: Role,
   isEmailVerified: boolean,
+  verificationStatus: VerificationStatusType,
   profile: Pick<
     DonorProfile,
-    | 'firstName' | 'lastName' | 'bloodType' | 'phone'
-    | 'city' | 'state' | 'province' | 'district' | 'municipality' | 'address'
-    | 'gender' | 'availableToDonate' | 'notificationsEnabled'
+    | 'firstName'
+    | 'lastName'
+    | 'bloodType'
+    | 'phone'
+    | 'city'
+    | 'state'
+    | 'province'
+    | 'district'
+    | 'municipality'
+    | 'address'
+    | 'gender'
+    | 'availableToDonate'
+    | 'notificationsEnabled'
   >,
 ): AuthUserPayload => ({
   id: userId,
   email,
   role,
+  verificationStatus,
   isEmailVerified,
   firstName: profile.firstName,
   lastName: profile.lastName,
@@ -140,7 +168,13 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
   // 3. Transactional create
   const { user, donorProfile } = await prisma.$transaction(async (tx) => {
     const createdUser = await tx.user.create({
-      data: { email, passwordHash, role: data.role },
+      data: {
+        email,
+        passwordHash,
+        role: data.role,
+        verificationStatus:
+          data.role === Role.DONOR ? VerificationStatus.APPROVED : VerificationStatus.PENDING,
+      } as never,
     });
 
     let createdDonorProfile: DonorProfile | null = null;
@@ -251,28 +285,41 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
   });
 
   // 4. Generate tokens
-  const tokens = generateTokens({ userId: user.id, role: user.role, email: user.email });
+  const tokens = generateTokens({
+    userId: user.id,
+    role: user.role,
+    email: user.email,
+    verificationStatus: getVerificationStatus(user),
+  });
 
   // 5. Build the enriched user payload
   let userPayload: AuthUserPayload;
 
   if (user.role === Role.DONOR && donorProfile) {
     userPayload = buildDonorUserPayload(
-      user.id, user.email, user.role, user.isEmailVerified, donorProfile,
+      user.id,
+      user.email,
+      user.role,
+      user.isEmailVerified,
+      getVerificationStatus(user),
+      donorProfile,
     );
   } else {
     // For Hospital / Blood Bank, fetch the name from the profile
-    const hospitalProfile = user.role === Role.HOSPITAL
-      ? await prisma.hospitalProfile.findUnique({ where: { userId: user.id } })
-      : null;
-    const bloodBankProfile = user.role === Role.BLOOD_BANK
-      ? await prisma.bloodBankProfile.findUnique({ where: { userId: user.id } })
-      : null;
+    const hospitalProfile =
+      user.role === Role.HOSPITAL
+        ? await prisma.hospitalProfile.findUnique({ where: { userId: user.id } })
+        : null;
+    const bloodBankProfile =
+      user.role === Role.BLOOD_BANK
+        ? await prisma.bloodBankProfile.findUnique({ where: { userId: user.id } })
+        : null;
 
     userPayload = {
       id: user.id,
       email: user.email,
       role: user.role,
+      verificationStatus: getVerificationStatus(user),
       isEmailVerified: user.isEmailVerified,
       name: hospitalProfile?.name ?? bloodBankProfile?.name,
     };
@@ -285,36 +332,26 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
  * Authenticates a user and returns tokens + enriched profile.
  */
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
-  // Ensure the default admin exists in the database
-  if (data.email.toLowerCase() === 'admin@lifelink.app') {
-    const adminExists = await prisma.user.findFirst({
-      where: { email: 'admin@lifelink.app' }
-    });
-    
-    if (!adminExists) {
-      const passwordHash = await bcrypt.hash('AdminPassword123', 10);
-      await prisma.user.create({
-        data: {
-          email: 'admin@lifelink.app',
-          passwordHash,
-          role: Role.ADMIN,
-          isEmailVerified: true
-        }
-      });
-    }
-  }
-
   const email = data.email.toLowerCase();
   const user = await prisma.user.findFirst({
     where: { email, isActive: true },
   });
 
-  if (!user) {throw AppError.unauthorized('Invalid email or password');}
+  if (!user) {
+    throw AppError.unauthorized('Invalid email or password');
+  }
 
   const isPasswordValid = await bcrypt.compare(data.password, user.passwordHash);
-  if (!isPasswordValid) {throw AppError.unauthorized('Invalid email or password');}
+  if (!isPasswordValid) {
+    throw AppError.unauthorized('Invalid email or password');
+  }
 
-  const tokens = generateTokens({ userId: user.id, role: user.role, email: user.email });
+  const tokens = generateTokens({
+    userId: user.id,
+    role: user.role,
+    email: user.email,
+    verificationStatus: getVerificationStatus(user),
+  });
 
   // Fetch the role-specific profile to enrich the response
   let userPayload: AuthUserPayload;
@@ -323,15 +360,29 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     const donorProfile = await prisma.donorProfile.findUnique({ where: { userId: user.id } });
     if (donorProfile) {
       userPayload = buildDonorUserPayload(
-        user.id, user.email, user.role, user.isEmailVerified, donorProfile,
+        user.id,
+        user.email,
+        user.role,
+        user.isEmailVerified,
+        getVerificationStatus(user),
+        donorProfile,
       );
     } else {
-      userPayload = { id: user.id, email: user.email, role: user.role, isEmailVerified: user.isEmailVerified };
+      userPayload = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        verificationStatus: getVerificationStatus(user),
+        isEmailVerified: user.isEmailVerified,
+      };
     }
   } else if (user.role === Role.HOSPITAL) {
     const profile = await prisma.hospitalProfile.findUnique({ where: { userId: user.id } });
     userPayload = {
-      id: user.id, email: user.email, role: user.role,
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      verificationStatus: getVerificationStatus(user),
       isEmailVerified: user.isEmailVerified,
       name: profile?.name,
       phone: profile?.phone,
@@ -340,14 +391,23 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
   } else if (user.role === Role.BLOOD_BANK) {
     const profile = await prisma.bloodBankProfile.findUnique({ where: { userId: user.id } });
     userPayload = {
-      id: user.id, email: user.email, role: user.role,
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      verificationStatus: getVerificationStatus(user),
       isEmailVerified: user.isEmailVerified,
       name: profile?.name,
       phone: profile?.phone,
     };
   } else {
     // ADMIN — no extra profile
-    userPayload = { id: user.id, email: user.email, role: user.role, isEmailVerified: user.isEmailVerified };
+    userPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      verificationStatus: getVerificationStatus(user),
+      isEmailVerified: user.isEmailVerified,
+    };
   }
 
   return { ...tokens, user: userPayload };
@@ -364,11 +424,20 @@ export const refreshTokens = async (refreshToken: string): Promise<AuthTokens> =
       where: { id: decoded.userId, isActive: true },
     });
 
-    if (!user) {throw AppError.unauthorized('User no longer exists or has been disabled');}
+    if (!user) {
+      throw AppError.unauthorized('User no longer exists or has been disabled');
+    }
 
-    return generateTokens({ userId: user.id, role: user.role, email: user.email });
+    return generateTokens({
+      userId: user.id,
+      role: user.role,
+      email: user.email,
+      verificationStatus: getVerificationStatus(user),
+    });
   } catch (error) {
-    if (error instanceof AppError) {throw error;}
+    if (error instanceof AppError) {
+      throw error;
+    }
     throw AppError.unauthorized('Invalid or expired refresh token');
   }
 };

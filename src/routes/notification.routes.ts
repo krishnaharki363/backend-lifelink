@@ -4,13 +4,13 @@
  */
 
 import { Router } from 'express';
-import { authenticate } from '@middleware/auth.middleware';
+import { authenticate, requireApprovedAccount } from '@middleware/auth.middleware';
 import * as notificationController from '@controllers/notification.controller';
 
 const router = Router();
 
 // All notification routes require authentication
-router.use(authenticate);
+router.use(authenticate, requireApprovedAccount);
 
 /**
  * @route   GET /api/v1/notifications

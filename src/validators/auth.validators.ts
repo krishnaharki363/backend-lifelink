@@ -169,8 +169,12 @@ export type RegisterRequest = z.infer<typeof registerSchema>;
 
 // ─── Token Validators ─────────────────────────────────────────────────────────
 
-export const refreshTokenSchema = z.object({
-  refreshToken: z.string().min(1, 'Refresh token is required'),
-});
+export const refreshTokenSchema = z
+  .object({
+    // The preferred transport is the HTTP-only cookie. The body form remains
+    // supported for non-browser clients and backwards compatibility.
+    refreshToken: z.string().min(1, 'Refresh token is required').optional(),
+  })
+  .default({});
 
 export type RefreshTokenRequest = z.infer<typeof refreshTokenSchema>;

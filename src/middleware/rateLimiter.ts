@@ -38,7 +38,8 @@
  */
 
 import rateLimit from 'express-rate-limit';
-import { env } from '@config/env';
+import type { Request, Response } from 'express';
+import { env, isDevelopment, isTest } from '@config/env';
 import { HttpStatus, HttpMessage } from '@constants/http.constants';
 import { ErrorCode } from '@interfaces/error.interface';
 import type { ApiErrorResponse } from '@utils/apiResponse';
@@ -71,9 +72,15 @@ export const globalLimiter = rateLimit({
 
   // Skip rate limiting in test environment or for health check requests
   skip: (req) =>
-    env.NODE_ENV === 'test' || req.originalUrl.endsWith('/health') || req.path.endsWith('/health'),
+    isDevelopment || isTest || req.originalUrl.endsWith('/health') || req.path.endsWith('/health'),
 
-  handler: (_req, res) => {
+  handler: (req, res) => {
+    const resetTime = (
+      req as Request & { rateLimit?: { resetTime?: Date } }
+    ).rateLimit?.resetTime?.getTime();
+    if (resetTime) {
+      res.setHeader('Retry-After', Math.max(1, Math.ceil((resetTime - Date.now()) / 1000)));
+    }
     res
       .status(HttpStatus.TOO_MANY_REQUESTS)
       .json(buildRateLimitResponse(HttpMessage.TOO_MANY_REQUESTS));
@@ -89,23 +96,38 @@ export const globalLimiter = rateLimit({
  * 10 attempts per 15 minutes is the industry-standard balance between
  * security and usability. A human won't hit this; a brute-forcer will.
  */
-export const authLimiter = rateLimit({
+const authSkip = () => isDevelopment || isTest;
+
+const authHandler = (message: string) => (req: Request, res: Response) => {
+  const resetTime = (
+    req as Request & { rateLimit?: { resetTime?: Date } }
+  ).rateLimit?.resetTime?.getTime();
+  if (resetTime) {
+    res.setHeader('Retry-After', Math.max(1, Math.ceil((resetTime - Date.now()) / 1000)));
+  }
+  res.status(HttpStatus.TOO_MANY_REQUESTS).json(buildRateLimitResponse(message));
+};
+
+export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes — fixed, not configurable
   max: 10, // 10 login attempts per 15 minutes
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  skip: () => env.NODE_ENV === 'test',
-
-  handler: (_req, res) => {
-    res
-      .status(HttpStatus.TOO_MANY_REQUESTS)
-      .json(
-        buildRateLimitResponse(
-          'Too many login attempts. Please wait 15 minutes before trying again.',
-        ),
-      );
-  },
+  skip: authSkip,
+  handler: authHandler('Too many sign-in attempts. Please try again after the retry period.'),
 });
+
+export const registrationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skip: authSkip,
+  handler: authHandler('Too many registration attempts. Please try again after the retry period.'),
+});
+
+// Backwards-compatible name for imports outside the auth route module.
+export const authLimiter = loginLimiter;
 
 // ─── Sensitive API Rate Limiter ───────────────────────────────────────────────
 
@@ -121,7 +143,7 @@ export const sensitiveApiLimiter = rateLimit({
   max: 5, // 5 requests per hour
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  skip: () => env.NODE_ENV === 'test',
+  skip: authSkip,
 
   handler: (_req, res) => {
     res

@@ -6,7 +6,14 @@
 import request from 'supertest';
 import app from '@/app';
 import { prisma, disconnectDatabase } from '@config/database';
-import { Role, BloodType, RequestUrgency, RequestStatus, AppointmentStatus } from '@prisma/client';
+import {
+  Role,
+  BloodType,
+  RequestUrgency,
+  RequestStatus,
+  AppointmentStatus,
+  VerificationStatus,
+} from '@prisma/client';
 import { HttpStatus } from '@constants/http.constants';
 
 describe('LifeLink Workflow Integration', () => {
@@ -54,7 +61,7 @@ describe('LifeLink Workflow Integration', () => {
       contactPerson: 'Dr. Sita',
       phone: '014400000',
     });
-    hospitalToken = hospRes.body.data.accessToken;
+    const hospitalUserId = hospRes.body.data.user.id as string;
 
     // 3. Register Blood Bank
     const bankRes = await request(app).post('/api/v1/auth/register').send({
@@ -67,7 +74,28 @@ describe('LifeLink Workflow Integration', () => {
       contactPerson: 'Ram Bahadur',
       phone: '015500000',
     });
-    bankToken = bankRes.body.data.accessToken;
+    const bankUserId = bankRes.body.data.user.id as string;
+
+    // Workflow tests exercise approved organization behavior. Registration
+    // intentionally leaves organizations pending, so approve the fixtures and
+    // log in again to issue tokens containing the current verification status.
+    await prisma.user.updateMany({
+      where: { id: { in: [hospitalUserId, bankUserId] } },
+      data: { verificationStatus: VerificationStatus.APPROVED },
+    });
+
+    const [hospitalLogin, bankLogin] = await Promise.all([
+      request(app).post('/api/v1/auth/login').send({
+        email: 'hosp@test.lifelink.app',
+        password: 'Password123',
+      }),
+      request(app).post('/api/v1/auth/login').send({
+        email: 'bank@test.lifelink.app',
+        password: 'Password123',
+      }),
+    ]);
+    hospitalToken = hospitalLogin.body.data.accessToken;
+    bankToken = bankLogin.body.data.accessToken;
 
     // Resolve profile IDs
     const donorProfile = await prisma.donorProfile.findUnique({ where: { userId: donorId } });
@@ -75,7 +103,7 @@ describe('LifeLink Workflow Integration', () => {
       donorId = donorProfile.id;
     }
 
-    const bankProfile = await prisma.bloodBankProfile.findFirst();
+    const bankProfile = await prisma.bloodBankProfile.findUnique({ where: { userId: bankUserId } });
     if (bankProfile) {
       bankId = bankProfile.id;
     }
@@ -145,6 +173,23 @@ describe('LifeLink Workflow Integration', () => {
         .set('Authorization', `Bearer ${donorToken}`)
         .expect(HttpStatus.CONFLICT);
     });
+
+    it('should reject reversing a matched request to an arbitrary status', async () => {
+      await request(app)
+        .patch(`/api/v1/blood-requests/${requestId}/status`)
+        .set('Authorization', `Bearer ${hospitalToken}`)
+        .send({ status: RequestStatus.PENDING })
+        .expect(HttpStatus.CONFLICT);
+    });
+  });
+
+  describe('Authorization boundaries', () => {
+    it('should deny hospitals access to the appointment list', async () => {
+      await request(app)
+        .get('/api/v1/appointments')
+        .set('Authorization', `Bearer ${hospitalToken}`)
+        .expect(HttpStatus.FORBIDDEN);
+    });
   });
 
   describe('Donation Appointments', () => {
@@ -191,7 +236,58 @@ describe('LifeLink Workflow Integration', () => {
       appointmentId = res.body.data.id;
     });
 
+    it("should reject linking another donor's matched request", async () => {
+      const secondDonorRes = await request(app).post('/api/v1/auth/register').send({
+        email: 'second-donor@test.lifelink.app',
+        password: 'Password123',
+        role: Role.DONOR,
+        firstName: 'Second',
+        lastName: 'Donor',
+        bloodType: BloodType.O_NEG,
+        dateOfBirth: '1996-06-06',
+        phone: '9841000001',
+        city: 'Kathmandu',
+        state: 'Bagmati',
+      });
+      const secondDonorToken = secondDonorRes.body.data.accessToken as string;
+
+      await request(app)
+        .post('/api/v1/appointments')
+        .set('Authorization', `Bearer ${secondDonorToken}`)
+        .send({
+          bloodBankId: bankId,
+          bloodRequestId: requestForApptId,
+          appointmentDate: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split('T')[0],
+          slot: '14:00',
+        })
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it('should reject linking a request that does not exist', async () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 4);
+
+      await request(app)
+        .post('/api/v1/appointments')
+        .set('Authorization', `Bearer ${donorToken}`)
+        .send({
+          bloodBankId: bankId,
+          bloodRequestId: '00000000-0000-0000-0000-000000000000',
+          appointmentDate: tomorrow.toISOString().split('T')[0],
+          slot: '14:00',
+        })
+        .expect(HttpStatus.NOT_FOUND);
+    });
+
     it('should allow blood bank to mark the appointment as COMPLETED and automatically fulfill the request and increase inventory', async () => {
+      await request(app)
+        .patch(`/api/v1/appointments/${appointmentId}/status`)
+        .set('Authorization', `Bearer ${bankToken}`)
+        .send({ status: AppointmentStatus.CONFIRMED })
+        .expect(HttpStatus.OK);
+
       const res = await request(app)
         .patch(`/api/v1/appointments/${appointmentId}/status`)
         .set('Authorization', `Bearer ${bankToken}`)
@@ -214,6 +310,24 @@ describe('LifeLink Workflow Integration', () => {
         },
       });
       expect(inv).toBeDefined();
+      expect(inv?.unitsAvailable).toBe(1);
+    });
+
+    it('should reject completing an already completed appointment', async () => {
+      await request(app)
+        .patch(`/api/v1/appointments/${appointmentId}/status`)
+        .set('Authorization', `Bearer ${bankToken}`)
+        .send({ status: AppointmentStatus.COMPLETED })
+        .expect(HttpStatus.CONFLICT);
+
+      const inv = await prisma.bloodInventory.findUnique({
+        where: {
+          bloodBankId_bloodType: {
+            bloodBankId: bankId,
+            bloodType: BloodType.O_NEG,
+          },
+        },
+      });
       expect(inv?.unitsAvailable).toBe(1);
     });
   });

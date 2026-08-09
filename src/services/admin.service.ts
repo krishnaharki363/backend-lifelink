@@ -4,7 +4,12 @@
  */
 
 import { prisma } from '@config/database';
-import { RequestStatus, type Role } from '@prisma/client';
+import { RequestStatus, Role, type Role as RoleType } from '@prisma/client';
+import {
+  VerificationStatus,
+  type VerificationStatus as VerificationStatusType,
+} from '@constants/verification.constants';
+import { AppError } from '@utils/AppError';
 
 export const getSystemMetrics = async () => {
   // Execute independent aggregation queries concurrently for performance
@@ -19,7 +24,7 @@ export const getSystemMetrics = async () => {
         isActive: true,
       },
     }),
-    
+
     // Count pending blood requests
     prisma.bloodRequest.count({
       where: {
@@ -36,10 +41,13 @@ export const getSystemMetrics = async () => {
   ]);
 
   // Transform raw Prisma groupBy results into a clean key-value object
-  const usersByRole = userCounts.reduce((acc, curr) => {
-    acc[curr.role] = curr._count.id;
-    return acc;
-  }, {} as Record<Role, number>);
+  const usersByRole = userCounts.reduce(
+    (acc, curr) => {
+      acc[curr.role] = curr._count.id;
+      return acc;
+    },
+    {} as Record<RoleType, number>,
+  );
 
   const totalUsers = Object.values(usersByRole).reduce((a, b) => a + b, 0);
 
@@ -169,5 +177,43 @@ export const getAllRequests = async () => {
     orderBy: {
       createdAt: 'desc',
     },
+  });
+};
+
+export const getPendingOrganizations = async () => {
+  return prisma.user.findMany({
+    where: {
+      role: { in: [Role.HOSPITAL, Role.BLOOD_BANK] },
+      verificationStatus: VerificationStatus.PENDING,
+    },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      verificationStatus: true,
+      createdAt: true,
+      hospitalProfile: { select: { name: true, licenseNumber: true, address: true, phone: true } },
+      bloodBankProfile: { select: { name: true, licenseNumber: true, address: true, phone: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  } as never);
+};
+
+export const updateOrganizationVerification = async (
+  userId: string,
+  status: VerificationStatusType,
+) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || (user.role !== Role.HOSPITAL && user.role !== Role.BLOOD_BANK)) {
+    throw AppError.notFound('Organization account not found');
+  }
+
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      verificationStatus: status,
+      isActive: status !== VerificationStatus.REJECTED,
+    },
+    select: { id: true, email: true, role: true, verificationStatus: true, isActive: true },
   });
 };

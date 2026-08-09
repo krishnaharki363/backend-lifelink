@@ -10,10 +10,14 @@ import {
   getInventoryByBloodType,
   listDonors,
   listHospitals,
-  listRequests
+  listRequests,
+  listPendingOrganizations,
+  updateOrganizationVerification,
 } from '@controllers/admin.controller';
 import { authenticate, authorize } from '@middleware/auth.middleware';
 import { Role } from '@prisma/client';
+import { validateBody } from '@middleware/validateRequest';
+import { updateVerificationStatusSchema } from '@validators/admin.validators';
 
 const router = Router();
 
@@ -61,5 +65,12 @@ router.get('/hospitals', listHospitals);
  * @access  Private (ADMIN)
  */
 router.get('/requests', listRequests);
+
+router.get('/organizations/pending', listPendingOrganizations);
+router.patch(
+  '/organizations/:userId/verification',
+  validateBody(updateVerificationStatusSchema),
+  updateOrganizationVerification,
+);
 
 export default router;
