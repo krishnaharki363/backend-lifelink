@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '@middleware/auth.middleware';
+import { authenticate, authorize, requireApprovedAccount } from '@middleware/auth.middleware';
 import { validateBody, validateQuery } from '@middleware/validateRequest';
 import * as donorController from '@controllers/donor.controller';
 import { Role } from '@prisma/client';
@@ -8,18 +8,14 @@ import { searchDonorsQuerySchema, updateDonorProfileSchema } from '@validators/d
 const router = Router();
 
 // All donor routes require authentication
-router.use(authenticate);
+router.use(authenticate, requireApprovedAccount);
 
 /**
  * @route   GET /api/v1/donors/profile
  * @desc    Get the current donor's profile
  * @access  Donor only
  */
-router.get(
-  '/profile',
-  authorize(Role.DONOR),
-  donorController.getProfile
-);
+router.get('/profile', authorize(Role.DONOR), donorController.getProfile);
 
 /**
  * @route   PUT /api/v1/donors/profile
@@ -30,7 +26,7 @@ router.put(
   '/profile',
   authorize(Role.DONOR),
   validateBody(updateDonorProfileSchema),
-  donorController.updateProfile
+  donorController.updateProfile,
 );
 
 /**
@@ -42,7 +38,7 @@ router.get(
   '/search',
   authorize(Role.HOSPITAL, Role.BLOOD_BANK, Role.ADMIN),
   validateQuery(searchDonorsQuerySchema),
-  donorController.searchDonors
+  donorController.searchDonors,
 );
 
 export default router;

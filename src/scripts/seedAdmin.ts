@@ -1,48 +1,45 @@
 import { PrismaClient, Role } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { env } from '@config/env';
+import { createContextLogger } from '@config/logger';
 
 const prisma = new PrismaClient();
+const log = createContextLogger('SeedAdmin');
 
-async function main() {
-  const adminEmail = 'admin@lifelink.app';
-  const plainPassword = 'AdminSecurePass123!';
+const main = async (): Promise<void> => {
+  if (!env.ADMIN_EMAIL || !env.ADMIN_PASSWORD) {
+    throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must be set before running admin:seed');
+  }
 
-  // Check if admin already exists
+  const adminEmail = env.ADMIN_EMAIL.toLowerCase();
   const existingAdmin = await prisma.user.findUnique({
     where: { email: adminEmail },
   });
 
   if (existingAdmin) {
-    console.log(`Admin user already exists with email: ${adminEmail}`);
+    log.info({ adminEmail }, 'Administrator already exists');
     return;
   }
 
-  // Hash the password
-  const saltRounds = 12;
-  const passwordHash = await bcrypt.hash(plainPassword, saltRounds);
-
-  // Create the admin user
+  const passwordHash = await bcrypt.hash(env.ADMIN_PASSWORD, env.BCRYPT_SALT_ROUNDS);
   await prisma.user.create({
     data: {
       email: adminEmail,
       passwordHash,
       role: Role.ADMIN,
+      verificationStatus: 'APPROVED',
       isEmailVerified: true,
       isActive: true,
     },
   });
 
-  console.log('--------------------------------------------------');
-  console.log('Successfully seeded administrator account.');
-  console.log(`Email:    ${adminEmail}`);
-  console.log(`Password: ${plainPassword}`);
-  console.log('--------------------------------------------------');
-}
+  log.info({ adminEmail }, 'Administrator created');
+};
 
 main()
-  .catch((e: unknown) => {
-    console.error('Error seeding admin user:', e);
-    process.exit(1);
+  .catch((error: unknown) => {
+    log.error({ error }, 'Unable to seed administrator');
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();

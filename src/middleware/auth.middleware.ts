@@ -21,7 +21,8 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '@config/env';
 import { AppError } from '@utils/AppError';
-import type { Role } from '@prisma/client';
+import { Role } from '@prisma/client';
+import { VerificationStatus } from '@constants/verification.constants';
 import type { JwtPayload } from '@services/auth.service';
 
 /**
@@ -78,4 +79,24 @@ export const authorize = (...allowedRoles: Role[]): RequestHandler => {
 
     next();
   };
+};
+
+/**
+ * Blocks operational access for organizations waiting for license review.
+ * The status is signed into the access token at login/registration time.
+ */
+export const requireApprovedAccount: RequestHandler = (req, _res, next) => {
+  if (!req.user) {
+    throw AppError.internal('Approval middleware requires authenticate middleware to run first');
+  }
+
+  const isOrganization = req.user.role === Role.HOSPITAL || req.user.role === Role.BLOOD_BANK;
+  if (isOrganization && req.user.verificationStatus === VerificationStatus.PENDING) {
+    throw AppError.forbidden('This organization account is pending administrative verification');
+  }
+  if (isOrganization && req.user.verificationStatus === VerificationStatus.REJECTED) {
+    throw AppError.forbidden('This organization account was not approved');
+  }
+
+  next();
 };

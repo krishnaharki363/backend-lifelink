@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: lifelink_test
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lifelink_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    volumes:
+      - lifelink_test_postgres:/var/lib/postgresql/data
+
+volumes:
+  lifelink_test_postgres:

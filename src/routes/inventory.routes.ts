@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express';
-import { authenticate, authorize } from '@middleware/auth.middleware';
+import { authenticate, authorize, requireApprovedAccount } from '@middleware/auth.middleware';
 import { validateBody } from '@middleware/validateRequest';
 import * as inventoryController from '@controllers/inventory.controller';
 import { Role } from '@prisma/client';
@@ -13,7 +13,7 @@ import { updateInventorySchema } from '@validators/inventory.validators';
 const router = Router();
 
 // All inventory routes require authentication
-router.use(authenticate);
+router.use(authenticate, requireApprovedAccount);
 
 /**
  * @route   PUT /api/v1/inventory
@@ -24,7 +24,7 @@ router.put(
   '/',
   authorize(Role.BLOOD_BANK),
   validateBody(updateInventorySchema),
-  inventoryController.updateInventory
+  inventoryController.updateInventory,
 );
 
 /**
@@ -35,7 +35,7 @@ router.put(
 router.get(
   '/',
   authorize(Role.HOSPITAL, Role.BLOOD_BANK, Role.ADMIN),
-  inventoryController.getSystemInventory
+  inventoryController.getSystemInventory,
 );
 
 export default router;

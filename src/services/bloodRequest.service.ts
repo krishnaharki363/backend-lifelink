@@ -13,6 +13,12 @@ import type {
 } from '@validators/bloodRequest.validators';
 import * as notificationService from '@services/notification.service';
 
+const FULFILLABLE_REQUEST_STATUSES: RequestStatus[] = [
+  RequestStatus.MATCHED_DONOR,
+  RequestStatus.MATCHED_INVENTORY,
+  RequestStatus.IN_DELIVERY,
+];
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SELECT_REQUEST_DETAILS = {
@@ -61,10 +67,7 @@ const SELECT_REQUEST_DETAILS = {
  * Creates a new blood request.
  * Checks inventory for Path A matching, otherwise alerts matching donors for Path B.
  */
-export const createBloodRequest = async (
-  userId: string,
-  data: CreateBloodRequestInput
-) => {
+export const createBloodRequest = async (userId: string, data: CreateBloodRequestInput) => {
   // 1. Ensure the user actually has a Hospital profile
   const hospitalProfile = await prisma.hospitalProfile.findUnique({
     where: { userId },
@@ -74,47 +77,47 @@ export const createBloodRequest = async (
     throw AppError.forbidden('Only registered hospitals can create blood requests');
   }
 
-  // 2. Try Path A: Check if any blood bank has enough inventory
-  const inventoryMatch = await prisma.bloodInventory.findFirst({
-    where: {
-      bloodType: data.bloodType,
-      unitsAvailable: { gte: data.unitsRequired },
-    },
-    include: { bloodBank: true },
-  });
+  // Lock the first eligible inventory row while creating the request. The
+  // reserved quantity is updated in the same transaction, so concurrent
+  // hospitals cannot claim the same units.
+  const result = await prisma.$transaction(async (tx) => {
+    const inventoryIds = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id"
+      FROM "blood_inventories"
+      WHERE "bloodType" = ${data.bloodType}::"BloodType"
+        AND "unitsAvailable" - "unitsReserved" >= ${data.unitsRequired}
+      ORDER BY "lastUpdated" ASC
+      LIMIT 1
+      FOR UPDATE
+    `;
 
-  let request;
+    const inventoryMatch = inventoryIds[0]
+      ? await tx.bloodInventory.findUnique({
+          where: { id: inventoryIds[0].id },
+          include: { bloodBank: true },
+        })
+      : null;
 
-  if (inventoryMatch) {
-    // Inventory match found! Create request as MATCHED_INVENTORY
-    request = await prisma.bloodRequest.create({
-      data: {
-        ...data,
-        hospitalId: hospitalProfile.id,
-        status: RequestStatus.MATCHED_INVENTORY,
-        matchedBloodBankId: inventoryMatch.bloodBankId,
-      },
-      select: SELECT_REQUEST_DETAILS,
-    });
+    if (inventoryMatch) {
+      await tx.bloodInventory.update({
+        where: { id: inventoryMatch.id },
+        data: { unitsReserved: { increment: data.unitsRequired } } as never,
+      });
 
-    // Notify Hospital
-    await notificationService.createNotification(
-      userId,
-      'Request Matched (Inventory)',
-      `Your request for ${data.unitsRequired.toString()} units of ${data.bloodType} has been automatically matched with inventory from ${inventoryMatch.bloodBank.name}.`,
-      'REQUEST_MATCH_INVENTORY'
-    );
+      const request = await tx.bloodRequest.create({
+        data: {
+          ...data,
+          hospitalId: hospitalProfile.id,
+          status: RequestStatus.MATCHED_INVENTORY,
+          matchedBloodBankId: inventoryMatch.bloodBankId,
+        },
+        select: SELECT_REQUEST_DETAILS,
+      });
 
-    // Notify Blood Bank
-    await notificationService.createNotification(
-      inventoryMatch.bloodBank.userId,
-      'Blood Request Matched from Stock',
-      `A blood request for ${data.unitsRequired.toString()} units of ${data.bloodType} from ${hospitalProfile.name} has been matched to your stock. Please confirm delivery.`,
-      'REQUEST_MATCH_INVENTORY_BANK'
-    );
-  } else {
-    // No inventory match. Create request as PENDING
-    request = await prisma.bloodRequest.create({
+      return { request, inventoryMatch, matchingDonors: [] };
+    }
+
+    const request = await tx.bloodRequest.create({
       data: {
         ...data,
         hospitalId: hospitalProfile.id,
@@ -123,27 +126,43 @@ export const createBloodRequest = async (
       select: SELECT_REQUEST_DETAILS,
     });
 
-    // Path B Alert: Find all donors with matching bloodType who have notifications enabled
-    const matchingDonors = await prisma.donorProfile.findMany({
+    const matchingDonors = await tx.donorProfile.findMany({
       where: {
         bloodType: data.bloodType,
         notificationsEnabled: true,
         availableToDonate: true,
       },
+      select: { userId: true },
     });
 
-    // Notify matching donors
-    for (const donor of matchingDonors) {
+    return { request, inventoryMatch: null, matchingDonors };
+  });
+
+  if (result.inventoryMatch) {
+    await notificationService.createNotification(
+      userId,
+      'Request Matched (Inventory)',
+      `Your request for ${data.unitsRequired.toString()} units of ${data.bloodType} has been automatically matched with inventory from ${result.inventoryMatch.bloodBank.name}.`,
+      'REQUEST_MATCH_INVENTORY',
+    );
+    await notificationService.createNotification(
+      result.inventoryMatch.bloodBank.userId,
+      'Blood Request Matched from Stock',
+      `A blood request for ${data.unitsRequired.toString()} units of ${data.bloodType} from ${hospitalProfile.name} has been matched to your stock. Please confirm delivery.`,
+      'REQUEST_MATCH_INVENTORY_BANK',
+    );
+  } else {
+    for (const donor of result.matchingDonors) {
       await notificationService.createNotification(
         donor.userId,
         'Compatible Blood Request Posted',
         `An urgent request for blood type ${data.bloodType} (${data.urgency}) is needed at ${hospitalProfile.name}. Click to accept this request directly.`,
-        'REQUEST_ALERT'
+        'REQUEST_ALERT',
       );
     }
   }
 
-  return request;
+  return result.request;
 };
 
 /**
@@ -168,7 +187,11 @@ export const getBloodRequests = async (query: GetBloodRequestsQuery) => {
     whereClause.hospitalId = hospitalId;
   }
   if (matchedBloodBankId) {
-    whereClause.matchedBloodBankId = matchedBloodBankId;
+    // A bank sees its assigned matches plus open requests it may claim.
+    whereClause.OR = [
+      { matchedBloodBankId },
+      { status: RequestStatus.PENDING, matchedBloodBankId: null },
+    ];
   }
 
   // Execute query and count in parallel for pagination metadata
@@ -268,7 +291,7 @@ export const acceptBloodRequest = async (id: string, userId: string) => {
     userId,
     'Request Accepted',
     `You have accepted the request for ${result.bloodType}. The hospital has been notified.`,
-    'REQUEST_ACCEPTED_SELF'
+    'REQUEST_ACCEPTED_SELF',
   );
 
   return result;
@@ -296,8 +319,13 @@ export const confirmInventoryMatch = async (id: string, userId: string) => {
       throw AppError.notFound('Blood request not found');
     }
 
-    if (request.status !== RequestStatus.MATCHED_INVENTORY || request.matchedBloodBankId !== bloodBank.id) {
-      throw AppError.forbidden('This request is not matched with your center or is already confirmed');
+    if (
+      request.status !== RequestStatus.MATCHED_INVENTORY ||
+      request.matchedBloodBankId !== bloodBank.id
+    ) {
+      throw AppError.forbidden(
+        'This request is not matched with your center or is already confirmed',
+      );
     }
 
     const updated = await tx.bloodRequest.update({
@@ -318,6 +346,78 @@ export const confirmInventoryMatch = async (id: string, userId: string) => {
 
     return updated;
   });
+
+  return result;
+};
+
+/**
+ * Claims a pending request for a bank with enough unreserved inventory.
+ */
+export const claimInventoryMatch = async (id: string, userId: string) => {
+  const bloodBank = await prisma.bloodBankProfile.findUnique({ where: { userId } });
+  if (!bloodBank) {
+    throw AppError.forbidden('Only registered blood banks can claim blood requests');
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const request = await tx.bloodRequest.findUnique({
+      where: { id },
+      include: { hospital: { include: { user: true } } },
+    });
+
+    if (!request) {
+      throw AppError.notFound('Blood request not found');
+    }
+    if (request.status !== RequestStatus.PENDING || request.matchedBloodBankId) {
+      throw AppError.conflict('This request has already been matched or closed');
+    }
+
+    const inventoryIds = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id"
+      FROM "blood_inventories"
+      WHERE "bloodBankId" = ${bloodBank.id}::uuid
+        AND "bloodType" = ${request.bloodType}::"BloodType"
+        AND "unitsAvailable" - "unitsReserved" >= ${request.unitsRequired}
+      LIMIT 1
+      FOR UPDATE
+    `;
+    const inventoryId = inventoryIds[0]?.id;
+    if (!inventoryId) {
+      throw AppError.conflict('This blood bank does not have enough unreserved inventory');
+    }
+
+    await tx.bloodInventory.update({
+      where: { id: inventoryId },
+      data: { unitsReserved: { increment: request.unitsRequired } } as never,
+    });
+
+    const updated = await tx.bloodRequest.update({
+      where: { id },
+      data: {
+        status: RequestStatus.MATCHED_INVENTORY,
+        matchedBloodBankId: bloodBank.id,
+      },
+      select: SELECT_REQUEST_DETAILS,
+    });
+
+    await tx.notification.create({
+      data: {
+        userId: request.hospital.user.id,
+        title: 'Blood Bank Responded',
+        message: `${bloodBank.name} has reserved ${request.unitsRequired.toString()} unit(s) of ${request.bloodType} for your request.`,
+        type: 'REQUEST_MATCH_INVENTORY_BANK',
+      },
+    });
+
+    return updated;
+  });
+
+  await notificationService.createNotification(
+    userId,
+    'Blood Request Claimed',
+    `You reserved inventory for the ${result.bloodType} request from ${result.hospital.name}. Please confirm delivery when ready.`,
+    'REQUEST_CLAIMED_SELF',
+  );
 
   return result;
 };
@@ -344,6 +444,14 @@ export const fulfillBloodRequest = async (id: string, userId: string, role: Role
       throw AppError.conflict('Request is already fulfilled');
     }
 
+    if (request.status === RequestStatus.CANCELLED) {
+      throw AppError.conflict('Cancelled requests cannot be fulfilled');
+    }
+
+    if (!FULFILLABLE_REQUEST_STATUSES.includes(request.status)) {
+      throw AppError.conflict(`Request cannot be fulfilled from ${request.status} status`);
+    }
+
     // Authorization check
     if (role === Role.HOSPITAL && request.hospital.userId !== userId) {
       throw AppError.forbidden('You do not have permission to fulfill this request');
@@ -353,7 +461,10 @@ export const fulfillBloodRequest = async (id: string, userId: string, role: Role
     }
 
     // If inventory matched path, deduct stock
-    if (request.status === RequestStatus.MATCHED_INVENTORY || request.status === RequestStatus.IN_DELIVERY) {
+    if (
+      request.status === RequestStatus.MATCHED_INVENTORY ||
+      request.status === RequestStatus.IN_DELIVERY
+    ) {
       if (request.matchedBloodBankId) {
         const inventory = await tx.bloodInventory.findUnique({
           where: {
@@ -377,7 +488,8 @@ export const fulfillBloodRequest = async (id: string, userId: string, role: Role
           },
           data: {
             unitsAvailable: { decrement: request.unitsRequired },
-          },
+            unitsReserved: { decrement: request.unitsRequired },
+          } as never,
         });
       }
     }
@@ -435,7 +547,7 @@ export const updateBloodRequestStatus = async (
   id: string,
   userId: string,
   userRole: Role,
-  data: UpdateBloodRequestStatusInput
+  data: UpdateBloodRequestStatusInput,
 ) => {
   const request = await prisma.bloodRequest.findUnique({
     where: { id },
@@ -456,34 +568,60 @@ export const updateBloodRequestStatus = async (
     return fulfillBloodRequest(id, userId, userRole);
   }
 
+  if (newStatus !== RequestStatus.CANCELLED) {
+    throw AppError.conflict(
+      `Use the matching workflow to transition a request from ${request.status}`,
+    );
+  }
+
+  if (request.status === RequestStatus.CANCELLED) {
+    throw AppError.conflict('Closed requests cannot be changed');
+  }
+
   // General check for updates (Hospital own or Admin)
   if (userRole !== Role.ADMIN && request.hospital.userId !== userId) {
     throw AppError.forbidden('You do not have permission to update this request');
   }
 
-  const updatedRequest = await prisma.bloodRequest.update({
-    where: { id },
-    data: { status: newStatus },
-    select: SELECT_REQUEST_DETAILS,
+  const updatedRequest = await prisma.$transaction(async (tx) => {
+    if (
+      request.matchedBloodBankId &&
+      (request.status === RequestStatus.MATCHED_INVENTORY ||
+        request.status === RequestStatus.IN_DELIVERY)
+    ) {
+      await tx.bloodInventory.update({
+        where: {
+          bloodBankId_bloodType: {
+            bloodBankId: request.matchedBloodBankId,
+            bloodType: request.bloodType,
+          },
+        },
+        data: { unitsReserved: { decrement: request.unitsRequired } } as never,
+      });
+    }
+
+    return tx.bloodRequest.update({
+      where: { id },
+      data: { status: newStatus },
+      select: SELECT_REQUEST_DETAILS,
+    });
   });
 
-  // Notify matched entities of cancellation or state change
-  if (newStatus === RequestStatus.CANCELLED) {
-    if (request.matchedDonorId && request.matchedDonor) {
-      await notificationService.createNotification(
-        request.matchedDonor.user.id,
-        'Matched Request Cancelled',
-        `The request for ${request.bloodType} from ${request.hospital.name} you accepted has been cancelled.`,
-        'REQUEST_CANCELLED_ALERT'
-      );
-    } else if (request.matchedBloodBankId && request.matchedBloodBank) {
-      await notificationService.createNotification(
-        request.matchedBloodBank.user.id,
-        'Matched Request Cancelled',
-        `The request for ${request.bloodType} from ${request.hospital.name} matched with your center has been cancelled.`,
-        'REQUEST_CANCELLED_ALERT'
-      );
-    }
+  // Notify matched entities about cancellation.
+  if (request.matchedDonorId && request.matchedDonor) {
+    await notificationService.createNotification(
+      request.matchedDonor.user.id,
+      'Matched Request Cancelled',
+      `The request for ${request.bloodType} from ${request.hospital.name} you accepted has been cancelled.`,
+      'REQUEST_CANCELLED_ALERT',
+    );
+  } else if (request.matchedBloodBankId && request.matchedBloodBank) {
+    await notificationService.createNotification(
+      request.matchedBloodBank.user.id,
+      'Matched Request Cancelled',
+      `The request for ${request.bloodType} from ${request.hospital.name} matched with your center has been cancelled.`,
+      'REQUEST_CANCELLED_ALERT',
+    );
   }
 
   return updatedRequest;

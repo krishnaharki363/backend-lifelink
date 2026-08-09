@@ -24,6 +24,23 @@ export const updateInventory = async (userId: string, data: UpdateInventoryInput
     throw AppError.forbidden('Only registered blood banks can update inventory');
   }
 
+  const currentInventory = await prisma.bloodInventory.findUnique({
+    where: {
+      bloodBankId_bloodType: {
+        bloodBankId: bloodBankProfile.id,
+        bloodType: data.bloodType,
+      },
+    },
+  });
+  const existingReservedUnits = currentInventory
+    ? (currentInventory as unknown as { unitsReserved: number }).unitsReserved
+    : 0;
+  if (currentInventory && data.unitsAvailable < existingReservedUnits) {
+    throw AppError.conflict(
+      `Stock cannot be set below the ${existingReservedUnits.toString()} units already reserved for blood requests`,
+    );
+  }
+
   // 2. Upsert the inventory record
   // Prisma's upsert uses the unique composite constraint we defined in the schema
   // @@unique([bloodBankId, bloodType])
@@ -49,7 +66,12 @@ export const updateInventory = async (userId: string, data: UpdateInventoryInput
     },
   });
 
-  return inventory;
+  const reservedUnits = (inventory as unknown as { unitsReserved: number }).unitsReserved;
+  return {
+    ...inventory,
+    unitsReserved: reservedUnits,
+    unitsAvailableForMatching: inventory.unitsAvailable - reservedUnits,
+  };
 };
 
 /**
@@ -77,5 +99,12 @@ export const getSystemInventory = async () => {
   // by blood type using Prisma's groupBy, but returning the detailed list
   // is more useful for hospitals looking for specific local stock.
 
-  return inventories;
+  return inventories.map((inventory) => {
+    const reservedUnits = (inventory as unknown as { unitsReserved: number }).unitsReserved;
+    return {
+      ...inventory,
+      unitsReserved: reservedUnits,
+      unitsAvailableForMatching: inventory.unitsAvailable - reservedUnits,
+    };
+  });
 };

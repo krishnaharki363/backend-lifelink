@@ -4,15 +4,19 @@
  */
 
 import { Router } from 'express';
-import { authenticate } from '@middleware/auth.middleware';
+import { authenticate, authorize, requireApprovedAccount } from '@middleware/auth.middleware';
 import { validateBody } from '@middleware/validateRequest';
 import * as appointmentController from '@controllers/appointment.controller';
-import { createAppointmentSchema, updateAppointmentStatusSchema } from '@validators/appointment.validators';
+import {
+  createAppointmentSchema,
+  updateAppointmentStatusSchema,
+} from '@validators/appointment.validators';
+import { Role } from '@prisma/client';
 
 const router = Router();
 
 // All appointment routes require authentication
-router.use(authenticate);
+router.use(authenticate, requireApprovedAccount);
 
 /**
  * @route   POST /api/v1/appointments
@@ -21,8 +25,9 @@ router.use(authenticate);
  */
 router.post(
   '/',
+  authorize(Role.DONOR),
   validateBody(createAppointmentSchema),
-  appointmentController.createAppointment
+  appointmentController.createAppointment,
 );
 
 /**
@@ -30,7 +35,11 @@ router.post(
  * @desc    Get appointments for current authenticated user/center
  * @access  Private
  */
-router.get('/', appointmentController.getAppointments);
+router.get(
+  '/',
+  authorize(Role.DONOR, Role.BLOOD_BANK, Role.ADMIN),
+  appointmentController.getAppointments,
+);
 
 /**
  * @route   PATCH /api/v1/appointments/:id/status
@@ -39,8 +48,9 @@ router.get('/', appointmentController.getAppointments);
  */
 router.patch(
   '/:id/status',
+  authorize(Role.DONOR, Role.BLOOD_BANK, Role.ADMIN),
   validateBody(updateAppointmentStatusSchema),
-  appointmentController.updateStatus
+  appointmentController.updateStatus,
 );
 
 export default router;

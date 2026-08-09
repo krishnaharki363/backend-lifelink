@@ -86,6 +86,8 @@ services:
       # DIRECT_URL        → Neon direct connection string  (for migrations)
       # JWT_ACCESS_SECRET → min 32 chars, random string
       # JWT_REFRESH_SECRET→ min 32 chars, different random string
+      # ADMIN_EMAIL       → only needed while running the one-time admin seed
+      # ADMIN_PASSWORD    → random 16+ character secret; remove after seeding
       # ALLOWED_ORIGINS   → https://lifelink.krishnaharki.com.np
       # SMTP_HOST         → e.g. smtp.gmail.com
       # SMTP_USER         → your Gmail address

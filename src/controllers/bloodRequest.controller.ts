@@ -29,7 +29,7 @@ export const createRequest = catchAsync(async (req: Request, res: Response) => {
 
   const result = await bloodRequestService.createBloodRequest(
     user.userId,
-    req.body as CreateBloodRequestInput
+    req.body as CreateBloodRequestInput,
   );
 
   sendSuccess(res, result, 'Blood request created successfully', HttpStatus.CREATED);
@@ -102,7 +102,7 @@ export const updateStatus = catchAsync(async (req: Request, res: Response) => {
     requestId,
     user.userId,
     user.role,
-    req.body as UpdateBloodRequestStatusInput
+    req.body as UpdateBloodRequestStatusInput,
   );
 
   sendSuccess(res, result, 'Blood request status updated successfully', HttpStatus.OK);
@@ -123,10 +123,7 @@ export const acceptRequest = catchAsync(async (req: Request, res: Response) => {
     throw AppError.badRequest('Request ID is required');
   }
 
-  const result = await bloodRequestService.acceptBloodRequest(
-    requestId,
-    user.userId
-  );
+  const result = await bloodRequestService.acceptBloodRequest(requestId, user.userId);
 
   sendSuccess(res, result, 'Blood request accepted successfully', HttpStatus.OK);
 });
@@ -146,10 +143,26 @@ export const confirmInventory = catchAsync(async (req: Request, res: Response) =
     throw AppError.badRequest('Request ID is required');
   }
 
-  const result = await bloodRequestService.confirmInventoryMatch(
-    requestId,
-    user.userId
-  );
+  const result = await bloodRequestService.confirmInventoryMatch(requestId, user.userId);
 
   sendSuccess(res, result, 'Inventory match confirmed successfully', HttpStatus.OK);
+});
+
+/**
+ * POST /api/v1/blood-requests/:id/claim-inventory
+ * Claims an open request using the current blood bank's available stock.
+ */
+export const claimInventory = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw AppError.unauthorized('Authentication context missing');
+  }
+
+  const requestId = req.params.id;
+  if (!requestId) {
+    throw AppError.badRequest('Request ID is required');
+  }
+
+  const result = await bloodRequestService.claimInventoryMatch(requestId, user.userId);
+  sendSuccess(res, result, 'Blood request claimed successfully', HttpStatus.OK);
 });
