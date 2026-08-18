@@ -149,6 +149,30 @@ export const confirmInventory = catchAsync(async (req: Request, res: Response) =
 });
 
 /**
+ * POST /api/v1/blood-requests/:id/reject-inventory
+ * Rejects a pre-delivery inventory match and reopens it for donors.
+ */
+export const rejectInventory = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user;
+  if (!user) {
+    throw AppError.unauthorized('Authentication context missing');
+  }
+
+  const requestId = req.params.id;
+  if (!requestId) {
+    throw AppError.badRequest('Request ID is required');
+  }
+
+  const result = await bloodRequestService.rejectInventoryMatch(requestId, user.userId);
+  sendSuccess(
+    res,
+    result,
+    'Inventory match rejected and request reopened for donors',
+    HttpStatus.OK,
+  );
+});
+
+/**
  * POST /api/v1/blood-requests/:id/claim-inventory
  * Claims an open request using the current blood bank's available stock.
  */

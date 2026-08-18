@@ -354,6 +354,34 @@ describe('LifeLink Workflow Integration', () => {
       // Should match automatically!
       expect(res.body.data.status).toBe(RequestStatus.MATCHED_INVENTORY);
       expect(res.body.data.matchedBloodBankId).toBe(bankId);
+      const matchedRequestId = res.body.data.id as string;
+
+      const rejectRes = await request(app)
+        .post(`/api/v1/blood-requests/${matchedRequestId}/reject-inventory`)
+        .set('Authorization', `Bearer ${bankToken}`)
+        .expect(HttpStatus.OK);
+
+      expect(rejectRes.body.data.status).toBe(RequestStatus.PENDING);
+      expect(rejectRes.body.data.matchedBloodBankId).toBeNull();
+
+      const inventory = await prisma.bloodInventory.findUnique({
+        where: {
+          bloodBankId_bloodType: {
+            bloodBankId: bankId,
+            bloodType: BloodType.O_NEG,
+          },
+        },
+      });
+      expect(inventory?.unitsReserved).toBe(0);
+
+      const donorRequests = await request(app)
+        .get('/api/v1/blood-requests?bloodType=O_NEG&status=PENDING')
+        .set('Authorization', `Bearer ${donorToken}`)
+        .expect(HttpStatus.OK);
+
+      expect(donorRequests.body.data.data).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: matchedRequestId })]),
+      );
     });
   });
 });

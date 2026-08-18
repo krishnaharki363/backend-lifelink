@@ -23,10 +23,14 @@ const getCompatibleBloodTypes = (patientBloodType: BloodType): BloodType[] => {
       return [BloodType.B_POS, BloodType.B_NEG, BloodType.O_POS, BloodType.O_NEG];
     case BloodType.AB_POS:
       return [
-        BloodType.AB_POS, BloodType.AB_NEG,
-        BloodType.A_POS, BloodType.A_NEG,
-        BloodType.B_POS, BloodType.B_NEG,
-        BloodType.O_POS, BloodType.O_NEG,
+        BloodType.AB_POS,
+        BloodType.AB_NEG,
+        BloodType.A_POS,
+        BloodType.A_NEG,
+        BloodType.B_POS,
+        BloodType.B_NEG,
+        BloodType.O_POS,
+        BloodType.O_NEG,
       ];
     case BloodType.A_NEG:
       return [BloodType.A_NEG, BloodType.O_NEG];
@@ -60,6 +64,7 @@ export const searchCompatibleDonors = async (query: SearchDonorsQuery) => {
   const whereClause: Prisma.DonorProfileWhereInput = {
     // Only search active donors (not soft-deleted users)
     user: { isActive: true },
+    availableToDonate: true,
     bloodType: { in: compatibleTypes },
   };
 
@@ -67,8 +72,8 @@ export const searchCompatibleDonors = async (query: SearchDonorsQuery) => {
     // Search across all location fields so hospitals can find donors
     // regardless of which registration path they used (simple vs full form)
     whereClause.OR = [
-      { city:         { contains: city, mode: 'insensitive' } },
-      { district:     { contains: city, mode: 'insensitive' } },
+      { city: { contains: city, mode: 'insensitive' } },
+      { district: { contains: city, mode: 'insensitive' } },
       { municipality: { contains: city, mode: 'insensitive' } },
     ];
   }
@@ -76,12 +81,10 @@ export const searchCompatibleDonors = async (query: SearchDonorsQuery) => {
   if (state) {
     // Append state/province filter to any existing OR clause
     const stateFilter: Prisma.DonorProfileWhereInput[] = [
-      { state:    { contains: state, mode: 'insensitive' } },
+      { state: { contains: state, mode: 'insensitive' } },
       { province: { contains: state, mode: 'insensitive' } },
     ];
-    whereClause.OR = whereClause.OR
-      ? [...whereClause.OR, ...stateFilter]
-      : stateFilter;
+    whereClause.OR = whereClause.OR ? [...whereClause.OR, ...stateFilter] : stateFilter;
   }
 
   // Execute query and count in parallel

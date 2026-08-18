@@ -351,6 +351,99 @@ export const confirmInventoryMatch = async (id: string, userId: string) => {
 };
 
 /**
+ * Rejects a pre-delivery inventory match and reopens the request for donors.
+ */
+export const rejectInventoryMatch = async (id: string, userId: string) => {
+  const bloodBank = await prisma.bloodBankProfile.findUnique({ where: { userId } });
+  if (!bloodBank) {
+    throw AppError.forbidden('Only registered blood banks can reject inventory matches');
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const request = await tx.bloodRequest.findUnique({
+      where: { id },
+      include: {
+        hospital: { include: { user: true } },
+        matchedBloodBank: { include: { user: true } },
+      },
+    });
+
+    if (!request) {
+      throw AppError.notFound('Blood request not found');
+    }
+
+    if (
+      request.status !== RequestStatus.MATCHED_INVENTORY ||
+      request.matchedBloodBankId !== bloodBank.id
+    ) {
+      throw AppError.conflict('Only a pending inventory match can be rejected');
+    }
+
+    const inventory = await tx.bloodInventory.findUnique({
+      where: {
+        bloodBankId_bloodType: {
+          bloodBankId: bloodBank.id,
+          bloodType: request.bloodType,
+        },
+      },
+    });
+
+    if (!inventory || inventory.unitsReserved < request.unitsRequired) {
+      throw AppError.conflict('Reserved inventory for this match is no longer available');
+    }
+
+    await tx.bloodInventory.update({
+      where: {
+        bloodBankId_bloodType: {
+          bloodBankId: bloodBank.id,
+          bloodType: request.bloodType,
+        },
+      },
+      data: { unitsReserved: { decrement: request.unitsRequired } } as never,
+    });
+
+    const updatedRequest = await tx.bloodRequest.update({
+      where: { id },
+      data: {
+        status: RequestStatus.PENDING,
+        matchedBloodBankId: null,
+        matchedDonorId: null,
+      },
+      select: SELECT_REQUEST_DETAILS,
+    });
+
+    const matchingDonors = await tx.donorProfile.findMany({
+      where: {
+        bloodType: request.bloodType,
+        notificationsEnabled: true,
+        availableToDonate: true,
+      },
+      select: { userId: true },
+    });
+
+    return { updatedRequest, matchingDonors, hospital: request.hospital };
+  });
+
+  await notificationService.createNotification(
+    result.hospital.user.id,
+    'Blood Bank Match Rejected',
+    `${bloodBank.name} could not fulfill your request for ${result.updatedRequest.bloodType}. The request is open again for donor matching.`,
+    'REQUEST_MATCH_REJECTED',
+  );
+
+  for (const donor of result.matchingDonors) {
+    await notificationService.createNotification(
+      donor.userId,
+      'Blood Request Available',
+      `A request for blood type ${result.updatedRequest.bloodType} from ${result.hospital.name} is open for donation after the blood bank match was rejected.`,
+      'REQUEST_ALERT',
+    );
+  }
+
+  return result.updatedRequest;
+};
+
+/**
  * Claims a pending request for a bank with enough unreserved inventory.
  */
 export const claimInventoryMatch = async (id: string, userId: string) => {

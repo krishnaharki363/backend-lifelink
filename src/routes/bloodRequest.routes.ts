@@ -76,6 +76,17 @@ router.post(
 );
 
 /**
+ * @route   POST /api/v1/blood-requests/:id/reject-inventory
+ * @desc    Reject an inventory match and reopen the request for donors
+ * @access  Blood Bank only
+ */
+router.post(
+  '/:id/reject-inventory',
+  authorize(Role.BLOOD_BANK),
+  bloodRequestController.rejectInventory,
+);
+
+/**
  * @route   POST /api/v1/blood-requests/:id/claim-inventory
  * @desc    A blood bank claims an open request using reserved stock
  * @access  Blood Bank only
