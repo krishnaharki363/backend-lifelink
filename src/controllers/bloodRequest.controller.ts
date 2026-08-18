@@ -46,6 +46,7 @@ export const getRequests = catchAsync(async (req: Request, res: Response) => {
   }
 
   const query = req.query as unknown as GetBloodRequestsQuery;
+  let matchedDonorId: string | undefined;
 
   if (user.role === Role.HOSPITAL) {
     const hospital = await prisma.hospitalProfile.findUnique({
@@ -61,9 +62,18 @@ export const getRequests = catchAsync(async (req: Request, res: Response) => {
     if (bank) {
       query.matchedBloodBankId = bank.id;
     }
+  } else if (user.role === Role.DONOR && query.mine) {
+    const donor = await prisma.donorProfile.findUnique({
+      where: { userId: user.userId },
+      select: { id: true },
+    });
+    if (!donor) {
+      throw AppError.notFound('Donor profile not found');
+    }
+    matchedDonorId = donor.id;
   }
 
-  const result = await bloodRequestService.getBloodRequests(query);
+  const result = await bloodRequestService.getBloodRequests(query, matchedDonorId);
 
   sendSuccess(res, result, 'Blood requests retrieved successfully', HttpStatus.OK);
 });

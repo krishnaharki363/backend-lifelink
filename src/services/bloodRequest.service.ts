@@ -168,7 +168,7 @@ export const createBloodRequest = async (userId: string, data: CreateBloodReques
 /**
  * Retrieves a paginated and optionally filtered list of blood requests.
  */
-export const getBloodRequests = async (query: GetBloodRequestsQuery) => {
+export const getBloodRequests = async (query: GetBloodRequestsQuery, matchedDonorId?: string) => {
   const { page, limit, bloodType, status, urgency, hospitalId, matchedBloodBankId } = query;
   const skip = (page - 1) * limit;
 
@@ -192,6 +192,9 @@ export const getBloodRequests = async (query: GetBloodRequestsQuery) => {
       { matchedBloodBankId },
       { status: RequestStatus.PENDING, matchedBloodBankId: null },
     ];
+  }
+  if (matchedDonorId) {
+    whereClause.matchedDonorId = matchedDonorId;
   }
 
   // Execute query and count in parallel for pagination metadata

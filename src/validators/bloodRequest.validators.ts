@@ -53,6 +53,10 @@ export const getBloodRequestsQuerySchema = z.object({
   urgency: z.nativeEnum(RequestUrgency).optional(),
   hospitalId: z.string().uuid().optional(),
   matchedBloodBankId: z.string().uuid().optional(),
+  // For donors, restrict results to requests matched to the authenticated donor.
+  // The controller resolves the donor profile from the access token; clients
+  // cannot choose another donor's ID.
+  mine: z.coerce.boolean().optional().default(false),
 });
 
 export type GetBloodRequestsQuery = z.infer<typeof getBloodRequestsQuerySchema>;
